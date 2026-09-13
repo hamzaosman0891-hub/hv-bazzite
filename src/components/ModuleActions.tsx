@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem, ConfirmModal, showModal } from "decky-frontend-lib";
+import { PanelSection, PanelSectionRow, ButtonItem, ConfirmModal, showModal } from "@decky/ui";
 import { FaPlay, FaStop, FaTools, FaTrash } from "react-icons/fa";
 
 interface ModuleActionsProps {

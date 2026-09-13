@@ -1,5 +1,5 @@
 import React from "react";
-import { PanelSection, PanelSectionRow, Field } from "decky-frontend-lib";
+import { PanelSection, PanelSectionRow, Field } from "@decky/ui";
 import { FaCheckCircle, FaExclamationTriangle, FaTimesCircle, FaSync } from "react-icons/fa";
 
 interface StatusProps {

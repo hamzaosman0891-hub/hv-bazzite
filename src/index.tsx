@@ -1,4 +1,4 @@
-import { definePlugin, ServerAPI, staticClasses } from "decky-frontend-lib";
+import { definePlugin, ServerAPI, staticClasses } from "@decky/ui";
 import React, { useState, useEffect } from "react";
 import { FaMicrochip } from "react-icons/fa";
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { PanelSection, PanelSectionRow, ToggleField, ButtonItem, Field } from "decky-frontend-lib";
+import { PanelSection, PanelSectionRow, ToggleField, ButtonItem, Field } from "@decky/ui";
 import { FaGamepad, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 
 interface ShortcutItem {
