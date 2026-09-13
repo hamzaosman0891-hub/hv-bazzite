@@ -16,5 +16,5 @@ export default {
     typescript({ tsconfig: './tsconfig.json' }),
     json()
   ],
-  external: ['react', 'react-dom', '@decky/ui', '@decky/api']
+  external: ['@decky/ui', '@decky/api']
 };
