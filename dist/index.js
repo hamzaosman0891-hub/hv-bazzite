@@ -250,7 +250,7 @@ const getBackendLog = loggedCallable("get_backend_log");
 
 // Must match BACKEND_API in main.py. An older main.py (missing or lower value) means the Python backend
 // wasn't updated or Decky is still running the previous backend process.
-const EXPECTED_BACKEND_API = 8;
+const EXPECTED_BACKEND_API = 9;
 
 const StatusCard = ({ status, onRefresh }) => {
     if (!status) {
@@ -659,6 +659,10 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
     const selectedGame = games.find((g) => g.id === selectedGameId);
     const exeDir = selectedExe ? dirName(selectedExe) : "";
     const targetDir = manualTarget || exeDir;
+    const relativeToGame = (path) => {
+        const base = selectedGame?.install_dir?.replace(/\/+$/, "");
+        return base && path.startsWith(base + "/") ? path.slice(base.length + 1) : path;
+    };
     const loadLists = async () => {
         logAction("Scan games and patch archives");
         try {
@@ -688,7 +692,7 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
         if (!game)
             return;
         setSearching(true);
-        onLogMsg(`Searching ${game.name} for *-Win64-Shipping.exe...`);
+        onLogMsg(`Searching ${game.name} for .exe files...`);
         try {
             const res = await findGameShippingExe(game.install_dir, game.exe || "");
             if (latestSearchGameId !== gameId) {
@@ -716,7 +720,8 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
         const start = manualTarget || exeDir || selectedGame?.install_dir || "/home";
         logAction("Choose Folder Manually (picker opened)", { start });
         try {
-            const res = await openFilePicker(PICK_FOLDER, start, false, true);
+            // Show every file (including hidden ones) while browsing, so the right folder is easy to recognise
+            const res = await openFilePicker(PICK_FOLDER, start, true, true, undefined, undefined, true, true);
             if (!res?.realpath && !res?.path)
                 return;
             const folder = res.realpath || res.path;
@@ -779,7 +784,7 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "Custom HV Patch", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Game", strDefaultLabel: games.length ? "Select a game" : "No installed games found", rgOptions: games.map((g) => ({
                         data: g.id,
                         label: `${g.name}${g.source === "non-steam" ? " (Non-Steam)" : ""}`
-                    })), selectedOption: selectedGameId, onChange: (opt) => selectGame(opt.data) }) }), selectedGameId && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Shipping EXE", children: searching ? (SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#9ca3af" }, children: [SP_JSX.jsx(FaSearch, {}), " Searching..."] })) : selectedExe ? (SP_JSX.jsx("span", { style: { color: "#4ade80", fontWeight: 600, wordBreak: "break-all" }, children: fileName(selectedExe) })) : (SP_JSX.jsx("span", { style: { color: "#f87171", fontWeight: 600 }, children: "Not Found" })) }) })), exeCandidates.length > 1 && !manualTarget && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Multiple EXEs found", rgOptions: exeCandidates.map((c) => ({ data: c, label: c })), selectedOption: selectedExe, onChange: (opt) => {
+                    })), selectedOption: selectedGameId, onChange: (opt) => selectGame(opt.data) }) }), selectedGameId && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Game EXE", children: searching ? (SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#9ca3af" }, children: [SP_JSX.jsx(FaSearch, {}), " Searching..."] })) : selectedExe ? (SP_JSX.jsx("span", { style: { color: "#4ade80", fontWeight: 600, wordBreak: "break-all" }, children: fileName(selectedExe) })) : (SP_JSX.jsx("span", { style: { color: "#f87171", fontWeight: 600 }, children: "Not Found" })) }) })), exeCandidates.length > 1 && !manualTarget && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: `Found ${exeCandidates.length} EXEs`, rgOptions: exeCandidates.map((c) => ({ data: c, label: relativeToGame(c) })), selectedOption: selectedExe, onChange: (opt) => {
                         logAction("Select shipping exe", opt.data);
                         setSelectedExe(opt.data);
                     } }) })), selectedGameId && !searching && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "11px", wordBreak: "break-all", color: targetDir ? "#9ca3af" : "#f87171" }, children: targetDir

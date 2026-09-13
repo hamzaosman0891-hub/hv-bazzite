@@ -59,6 +59,11 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
   const exeDir = selectedExe ? dirName(selectedExe) : "";
   const targetDir = manualTarget || exeDir;
 
+  const relativeToGame = (path: string) => {
+    const base = selectedGame?.install_dir?.replace(/\/+$/, "");
+    return base && path.startsWith(base + "/") ? path.slice(base.length + 1) : path;
+  };
+
   const loadLists = async () => {
     logAction("Scan games and patch archives");
     try {
@@ -88,7 +93,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
     if (!game) return;
 
     setSearching(true);
-    onLogMsg(`Searching ${game.name} for *-Win64-Shipping.exe...`);
+    onLogMsg(`Searching ${game.name} for .exe files...`);
     try {
       const res = await findGameShippingExe(game.install_dir, game.exe || "");
       if (latestSearchGameId !== gameId) {
@@ -113,7 +118,8 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
     const start = manualTarget || exeDir || selectedGame?.install_dir || "/home";
     logAction("Choose Folder Manually (picker opened)", { start });
     try {
-      const res = await openFilePicker(PICK_FOLDER as any, start, false, true);
+      // Show every file (including hidden ones) while browsing, so the right folder is easy to recognise
+      const res = await openFilePicker(PICK_FOLDER as any, start, true, true, undefined, undefined, true, true);
       if (!res?.realpath && !res?.path) return;
       const folder = res.realpath || res.path;
       logAction("Manual patch folder chosen", folder);
@@ -199,7 +205,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
 
       {selectedGameId && (
         <PanelSectionRow>
-          <Field label="Shipping EXE">
+          <Field label="Game EXE">
             {searching ? (
               <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "#9ca3af" }}>
                 <FaSearch /> Searching...
@@ -216,8 +222,8 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
       {exeCandidates.length > 1 && !manualTarget && (
         <PanelSectionRow>
           <DropdownItem
-            label="Multiple EXEs found"
-            rgOptions={exeCandidates.map((c) => ({ data: c, label: c }))}
+            label={`Found ${exeCandidates.length} EXEs`}
+            rgOptions={exeCandidates.map((c) => ({ data: c, label: relativeToGame(c) }))}
             selectedOption={selectedExe}
             onChange={(opt) => {
               logAction("Select shipping exe", opt.data);

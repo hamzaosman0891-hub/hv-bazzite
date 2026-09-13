@@ -94,7 +94,7 @@ MODULE_FILE = os.path.join(MODULE_DIR, "cpuid_fault_emulation.ko")
 HV_GAMES_SERVICE = "/etc/systemd/system/hv-games.service"
 # Bump together with EXPECTED_BACKEND_API in src/lib/version.ts whenever the frontend relies on new backend
 # behaviour. Lets the panel detect a stale main.py (not copied, or Decky not restarted after updating).
-BACKEND_API = 8
+BACKEND_API = 9
 
 
 def get_invoking_user():
@@ -437,10 +437,20 @@ def list_non_steam_games(home):
     return games
 
 
-def find_shipping_exes(search_dir, exe_hint="", max_depth=6):
-    """Finds Unreal *-Win64-Shipping.exe files, best candidates first."""
+# Executables that are almost never the game itself; still listed, but last
+HELPER_EXE_RE = re.compile(
+    r"(crash|redist|vc_?redist|vcredist|dxsetup|directx|prereq|setup|install|unins|uninstall|"
+    r"easyanticheat|eac_|battleye|be_service|dotnet|physx|ue4prereq|ueprereq|cefprocess|helper|reporter)",
+    re.IGNORECASE,
+)
+MAX_EXE_CANDIDATES = 300
+
+
+def find_shipping_exes(search_dir, exe_hint="", max_depth=8):
+    """Finds every .exe in a game folder, best candidates first:
+    Unreal *-Shipping.exe, then exes in Binaries/Win64, then other exes, then installers/crash reporters."""
     candidates = []
-    if exe_hint and SHIPPING_EXE_RE.search(os.path.basename(exe_hint)) and os.path.isfile(exe_hint):
+    if exe_hint and exe_hint.lower().endswith(".exe") and os.path.isfile(exe_hint):
         candidates.append(exe_hint)
 
     # A StartDir of Binaries/Win64 means the game root is further up
@@ -451,18 +461,29 @@ def find_shipping_exes(search_dir, exe_hint="", max_depth=6):
     base_depth = search_dir.rstrip("/").count(os.sep)
     for root, dirs, files in os.walk(search_dir):
         depth = root.count(os.sep) - base_depth
-        dirs[:] = [d for d in dirs if d.lower() not in ("engine", ".hv_patch_backup", "__pycache__")]
+        dirs[:] = [d for d in dirs if d.lower() not in (".hv_patch_backup", "__pycache__")]
         if depth >= max_depth:
             dirs[:] = []
         for f in files:
-            if SHIPPING_EXE_RE.search(f):
+            if f.lower().endswith(".exe"):
                 full = os.path.join(root, f)
                 if full not in candidates:
                     candidates.append(full)
+        if len(candidates) >= MAX_EXE_CANDIDATES:
+            break
 
     def rank(path):
-        in_binaries = os.path.join("binaries", "win64") in path.lower()
-        return (0 if in_binaries else 1, path.count(os.sep), path)
+        name = os.path.basename(path)
+        lower = path.lower()
+        if SHIPPING_EXE_RE.search(name):
+            tier = 0
+        elif HELPER_EXE_RE.search(name) or f"{os.sep}engine{os.sep}" in lower or "_commonredist" in lower:
+            tier = 3
+        elif os.path.join("binaries", "win64") in lower:
+            tier = 1
+        else:
+            tier = 2
+        return (tier, path.count(os.sep), lower)
 
     return sorted(candidates, key=rank)
 
@@ -1645,17 +1666,18 @@ class Plugin:
         return sorted(games, key=lambda g: g["name"].lower())
 
     async def find_game_shipping_exe(self, install_dir, exe_hint=""):
-        """Finds *-Win64-Shipping.exe candidates inside a game's install directory."""
+        """Finds .exe candidates inside a game's install directory, shipping exes first."""
         if not install_dir or not os.path.isdir(install_dir):
             return {"success": False, "message": f"Install directory not found: {install_dir}", "candidates": []}
         try:
             candidates = await asyncio.to_thread(find_shipping_exes, install_dir, exe_hint or "")
         except Exception as e:
-            logger.error(f"Shipping exe search failed: {e}")
+            logger.error(f"Exe search failed: {e}")
             return {"success": False, "message": f"Search failed: {str(e)}", "candidates": []}
         if not candidates:
-            return {"success": False, "message": "No *-Win64-Shipping.exe found in this game's files.", "candidates": []}
-        return {"success": True, "message": f"Found {os.path.basename(candidates[0])}", "candidates": candidates}
+            return {"success": False, "message": "No .exe found in this game's files.", "candidates": []}
+        extra = f" ({len(candidates)} .exe files found, pick another from the list if needed)" if len(candidates) > 1 else ""
+        return {"success": True, "message": f"Found {os.path.basename(candidates[0])}{extra}", "candidates": candidates}
 
     async def scan_for_patches(self):
         """Scans common download locations for .zip/.7z/.rar patch archives."""
