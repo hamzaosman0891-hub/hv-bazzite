@@ -9,6 +9,8 @@
     "watch": "rollup -c -w"
   },
   "dependencies": {
+    "@decky/api": "^1.1.3",
+    "@decky/ui": "^4.12.0",
     "decky-frontend-lib": "^3.25.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

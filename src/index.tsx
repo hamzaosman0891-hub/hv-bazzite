@@ -1,22 +1,24 @@
-import { definePlugin, ServerAPI, staticClasses } from "@decky/ui";
+import { definePlugin, staticClasses } from "@decky/ui";
 import React, { useState, useEffect } from "react";
 import { FaMicrochip } from "react-icons/fa";
+import { getSystemStatus } from "./lib/api";
 
 import { StatusCard } from "./components/StatusCard";
 import { ZipSelector } from "./components/ZipSelector";
 import { ModuleActions } from "./components/ModuleActions";
 import { HvGamesCard } from "./components/HvGamesCard";
 import { UmipCard } from "./components/UmipCard";
+import { PatchCard } from "./components/PatchCard";
 
-const Content: React.FC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
+const Content: React.FC = () => {
   const [status, setStatus] = useState<any>(null);
   const [logMsg, setLogMsg] = useState<string>("");
 
   const refreshStatus = async () => {
     try {
-      const res = await serverAPI.callPluginMethod("get_system_status", {});
-      if (res.result) {
-        setStatus(res.result);
+      const res = await getSystemStatus();
+      if (res) {
+        setStatus(res);
       }
     } catch (e) {
       console.error("Failed to fetch system status:", e);
@@ -49,26 +51,24 @@ const Content: React.FC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
       )}
 
       <ModuleActions
-        serverAPI={serverAPI}
         status={status}
         onRefresh={refreshStatus}
         onLogMsg={setLogMsg}
       />
 
       <ZipSelector
-        serverAPI={serverAPI}
         sourceExists={status?.source_exists || false}
         onRefresh={refreshStatus}
         onLogMsg={setLogMsg}
       />
 
       <HvGamesCard
-        serverAPI={serverAPI}
         onLogMsg={setLogMsg}
       />
 
+      <PatchCard onLogMsg={setLogMsg} />
+
       <UmipCard
-        serverAPI={serverAPI}
         umipDisabled={status?.umip_disabled || false}
         onRefresh={refreshStatus}
         onLogMsg={setLogMsg}
@@ -77,11 +77,11 @@ const Content: React.FC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   );
 };
 
-export default definePlugin((serverAPI: ServerAPI) => {
+export default definePlugin(() => {
   return {
     title: <div className={staticClasses.Title}>CPUID & HV Controls</div>,
     icon: <FaMicrochip />,
-    content: <Content serverAPI={serverAPI} />,
+    content: <Content />,
     onDismount() {}
   };
 });

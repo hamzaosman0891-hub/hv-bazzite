@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { PanelSection, PanelSectionRow, ToggleField, ButtonItem, Field } from "@decky/ui";
 import { FaGamepad, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
+import { getSteamShortcuts, getHvGamesStatus, configureHvGames, disableHvGames } from "../lib/api";
 
 interface ShortcutItem {
   appid: string;
@@ -8,11 +9,10 @@ interface ShortcutItem {
 }
 
 interface HvGamesProps {
-  serverAPI: any;
   onLogMsg: (msg: string) => void;
 }
 
-export const HvGamesCard: React.FC<HvGamesProps> = ({ serverAPI, onLogMsg }) => {
+export const HvGamesCard: React.FC<HvGamesProps> = ({ onLogMsg }) => {
   const [shortcuts, setShortcuts] = useState<ShortcutItem[]>([]);
   const [selectedAppIds, setSelectedAppIds] = useState<Set<string>>(new Set());
   const [watcherStatus, setWatcherStatus] = useState<{ configured: boolean; active: boolean; appids: string[] }>({
@@ -25,17 +25,17 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ serverAPI, onLogMsg }) => 
   const fetchData = async () => {
     try {
       const [shortcutsRes, statusRes] = await Promise.all([
-        serverAPI.callPluginMethod("get_steam_shortcuts", {}),
-        serverAPI.callPluginMethod("get_hv_games_status", {})
+        getSteamShortcuts(),
+        getHvGamesStatus()
       ]);
 
-      if (shortcutsRes.result) {
-        setShortcuts(shortcutsRes.result);
+      if (shortcutsRes) {
+        setShortcuts(shortcutsRes);
       }
 
-      if (statusRes.result) {
-        setWatcherStatus(statusRes.result);
-        setSelectedAppIds(new Set(statusRes.result.appids || []));
+      if (statusRes) {
+        setWatcherStatus(statusRes);
+        setSelectedAppIds(new Set(statusRes.appids || []));
       }
     } catch (e) {
       console.error("Failed to load HV games data:", e);
@@ -64,9 +64,9 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ serverAPI, onLogMsg }) => 
 
     setLoading(true);
     try {
-      const res = await serverAPI.callPluginMethod("configure_hv_games", { appids: Array.from(selectedAppIds) });
-      if (res.result) {
-        onLogMsg(res.result.message);
+      const res = await configureHvGames(Array.from(selectedAppIds));
+      if (res) {
+        onLogMsg(res.message);
         fetchData();
       }
     } catch (e: any) {
@@ -79,9 +79,9 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ serverAPI, onLogMsg }) => 
   const handleDisableWatcher = async () => {
     setLoading(true);
     try {
-      const res = await serverAPI.callPluginMethod("disable_hv_games", {});
-      if (res.result) {
-        onLogMsg(res.result.message);
+      const res = await disableHvGames();
+      if (res) {
+        onLogMsg(res.message);
         fetchData();
       }
     } catch (e: any) {

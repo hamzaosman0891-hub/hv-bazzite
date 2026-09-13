@@ -1,15 +1,15 @@
 import React, { useState } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, ConfirmModal, showModal } from "@decky/ui";
 import { FaPlay, FaStop, FaTools, FaTrash } from "react-icons/fa";
+import { startModule, stopModule, buildAndInstallModule, uninstallModule } from "../lib/api";
 
 interface ModuleActionsProps {
-  serverAPI: any;
   status: any;
   onRefresh: () => void;
   onLogMsg: (msg: string) => void;
 }
 
-export const ModuleActions: React.FC<ModuleActionsProps> = ({ serverAPI, status, onRefresh, onLogMsg }) => {
+export const ModuleActions: React.FC<ModuleActionsProps> = ({ status, onRefresh, onLogMsg }) => {
   const [working, setWorking] = useState<boolean>(false);
 
   const isLoaded = status?.is_loaded;
@@ -22,9 +22,9 @@ export const ModuleActions: React.FC<ModuleActionsProps> = ({ serverAPI, status,
     setWorking(true);
     onLogMsg("Starting cpuid_fault_emulation module...");
     try {
-      const res = await serverAPI.callPluginMethod("start_module", {});
-      if (res.result) {
-        onLogMsg(res.result.message);
+      const res = await startModule();
+      if (res) {
+        onLogMsg(res.message);
       }
     } catch (e: any) {
       onLogMsg(`Start error: ${e.message || e}`);
@@ -38,9 +38,9 @@ export const ModuleActions: React.FC<ModuleActionsProps> = ({ serverAPI, status,
     setWorking(true);
     onLogMsg("Stopping cpuid_fault_emulation module...");
     try {
-      const res = await serverAPI.callPluginMethod("stop_module", {});
-      if (res.result) {
-        onLogMsg(res.result.message);
+      const res = await stopModule();
+      if (res) {
+        onLogMsg(res.message);
       }
     } catch (e: any) {
       onLogMsg(`Stop error: ${e.message || e}`);
@@ -54,9 +54,9 @@ export const ModuleActions: React.FC<ModuleActionsProps> = ({ serverAPI, status,
     setWorking(true);
     onLogMsg(`Initiating module build for ${osType || "system"}...`);
     try {
-      const res = await serverAPI.callPluginMethod("build_and_install_module", {});
-      if (res.result) {
-        onLogMsg(res.result.message);
+      const res = await buildAndInstallModule();
+      if (res) {
+        onLogMsg(res.message);
       }
     } catch (e: any) {
       onLogMsg(`Build error: ${e.message || e}`);
@@ -75,9 +75,9 @@ export const ModuleActions: React.FC<ModuleActionsProps> = ({ serverAPI, status,
           setWorking(true);
           onLogMsg("Uninstalling module...");
           try {
-            const res = await serverAPI.callPluginMethod("uninstall_module", {});
-            if (res.result) {
-              onLogMsg(res.result.message);
+            const res = await uninstallModule();
+            if (res) {
+              onLogMsg(res.message);
             }
           } catch (e: any) {
             onLogMsg(`Uninstall error: ${e.message || e}`);

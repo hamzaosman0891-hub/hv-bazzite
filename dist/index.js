@@ -66,6 +66,8 @@ function FaTrash (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 448 512"},"child":[{"tag":"path","attr":{"d":"M400 32H48C21.5 32 0 53.5 0 80v352c0 26.5 21.5 48 48 48h352c26.5 0 48-21.5 48-48V80c0-26.5-21.5-48-48-48z"},"child":[]}]})(props);
 }function FaShieldAlt (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M466.5 83.7l-192-80a48.15 48.15 0 0 0-36.9 0l-192 80C27.7 91.1 16 108.6 16 128c0 198.5 114.5 335.7 221.5 380.3 11.8 4.9 25.1 4.9 36.9 0C360.1 472.6 496 349.3 496 128c0-19.4-11.7-36.9-29.5-44.3zM256.1 446.3l-.1-381 175.9 73.3c-3.3 151.4-82.1 261.1-175.8 307.7z"},"child":[]}]})(props);
+}function FaSearch (props) {
+  return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"},"child":[]}]})(props);
 }function FaPlay (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 448 512"},"child":[{"tag":"path","attr":{"d":"M424.4 214.7L72.4 6.6C43.8-10.3 0 6.1 0 47.9V464c0 37.5 40.7 60.1 72.4 41.3l352-208c31.4-18.5 31.5-64.1 0-82.6z"},"child":[]}]})(props);
 }function FaMicrochip (props) {
@@ -83,6 +85,43 @@ function FaTrash (props) {
 }function FaCheckCircle (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M504 256c0 136.967-111.033 248-248 248S8 392.967 8 256 119.033 8 256 8s248 111.033 248 248zM227.314 387.314l184-184c6.248-6.248 6.248-16.379 0-22.627l-22.627-22.627c-6.248-6.249-16.379-6.249-22.628 0L216 308.118l-70.059-70.059c-6.248-6.248-16.379-6.248-22.628 0l-22.627 22.627c-6.248 6.248-6.248 16.379 0 22.627l104 104c6.249 6.249 16.379 6.249 22.628.001z"},"child":[]}]})(props);
 }
+
+const manifest = {"name":"CPUID Emulation & HV Controls","author":"Pareidolia","version":"1.0.0","flags":["root"],"api_version":1};
+const API_VERSION = 2;
+const internalAPIConnection = window.__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit;
+if (!internalAPIConnection) {
+    throw new Error('[@decky/api]: Failed to connect to the loader as as the loader API was not initialized. This is likely a bug in Decky Loader.');
+}
+let api;
+try {
+    api = internalAPIConnection.connect(API_VERSION, manifest.name);
+}
+catch {
+    api = internalAPIConnection.connect(1, manifest.name);
+    console.warn(`[@decky/api] Requested API version ${API_VERSION} but the running loader only supports version 1. Some features may not work.`);
+}
+if (api._version != API_VERSION) {
+    console.warn(`[@decky/api] Requested API version ${API_VERSION} but the running loader only supports version ${api._version}. Some features may not work.`);
+}
+const callable = api.callable;
+
+const getSystemStatus = callable("get_system_status");
+const scanForZips = callable("scan_for_zips");
+const openInDolphin = callable("open_in_dolphin");
+const extractCpuidZip = callable("extract_cpuid_zip");
+const buildAndInstallModule = callable("build_and_install_module");
+const startModule = callable("start_module");
+const stopModule = callable("stop_module");
+const disableUmip = callable("disable_umip");
+const uninstallModule = callable("uninstall_module");
+const getSteamShortcuts = callable("get_steam_shortcuts");
+const getHvGamesStatus = callable("get_hv_games_status");
+const configureHvGames = callable("configure_hv_games");
+const disableHvGames = callable("disable_hv_games");
+const getPatchableGames = callable("get_patchable_games");
+const findGameShippingExe = callable("find_game_shipping_exe");
+const scanForPatches = callable("scan_for_patches");
+const applyHvPatch = callable("apply_hv_patch");
 
 const StatusCard = ({ status, onRefresh }) => {
     if (!status) {
@@ -103,17 +142,17 @@ const StatusCard = ({ status, onRefresh }) => {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "System & Module Status", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Gaming OS", children: SP_JSX.jsx("span", { style: { textTransform: "capitalize", fontWeight: 600 }, children: status.os_type }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Kernel Version", children: SP_JSX.jsx("span", { children: status.kernel_release }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Module Status", children: renderBadge() }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "UMIP (clearcpuid=514)", children: status.umip_disabled ? (SP_JSX.jsx("span", { style: { color: "#4ade80" }, children: "Disabled" })) : (SP_JSX.jsx("span", { style: { color: "#facc15" }, children: "Enabled (Default)" })) }) }), status.native_support && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { padding: "8px", background: "rgba(59, 130, 246, 0.1)", borderRadius: "6px", fontSize: "12px" }, children: "\uD83D\uDCA1 Your CPU natively supports CPUID faulting. Kernel module is optional." }) }))] }));
 };
 
-const ZipSelector = ({ serverAPI, sourceExists, onRefresh, onLogMsg }) => {
+const ZipSelector = ({ sourceExists, onRefresh, onLogMsg }) => {
     const [zipList, setZipList] = SP_REACT.useState([]);
     const [selectedPath, setSelectedPath] = SP_REACT.useState("");
     const [loading, setLoading] = SP_REACT.useState(false);
     const scanZips = async () => {
         try {
-            const res = await serverAPI.callPluginMethod("scan_for_zips", {});
-            if (res.result && Array.isArray(res.result)) {
-                setZipList(res.result);
-                if (res.result.length > 0 && !selectedPath) {
-                    setSelectedPath(res.result[0].path);
+            const res = await scanForZips();
+            if (res && Array.isArray(res)) {
+                setZipList(res);
+                if (res.length > 0 && !selectedPath) {
+                    setSelectedPath(res[0].path);
                 }
             }
         }
@@ -127,9 +166,9 @@ const ZipSelector = ({ serverAPI, sourceExists, onRefresh, onLogMsg }) => {
     const handleOpenDolphin = async () => {
         setLoading(true);
         try {
-            const res = await serverAPI.callPluginMethod("open_in_dolphin", { target_path: selectedPath });
-            if (res.result) {
-                onLogMsg(res.result.message);
+            const res = await openInDolphin(selectedPath);
+            if (res) {
+                onLogMsg(res.message);
             }
         }
         catch (e) {
@@ -146,10 +185,10 @@ const ZipSelector = ({ serverAPI, sourceExists, onRefresh, onLogMsg }) => {
         }
         setLoading(true);
         try {
-            const res = await serverAPI.callPluginMethod("extract_cpuid_zip", { zip_path: selectedPath });
-            if (res.result) {
-                onLogMsg(res.result.message);
-                if (res.result.success) {
+            const res = await extractCpuidZip(selectedPath);
+            if (res) {
+                onLogMsg(res.message);
+                if (res.success) {
                     onRefresh();
                 }
             }
@@ -167,7 +206,7 @@ const ZipSelector = ({ serverAPI, sourceExists, onRefresh, onLogMsg }) => {
                     })), selectedOption: selectedPath, onChange: (opt) => setSelectedPath(opt.data) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Zip Archive Path", value: selectedPath, onChange: (e) => setSelectedPath(e.target.value) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", gap: "8px", width: "100%" }, children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: handleOpenDolphin, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFolderOpen, {}), " Open Location in Dolphin"] }) }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading || !selectedPath, onClick: handleExtractZip, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileArchive, {}), " Extract & Prepare Zip"] }) }) })] }));
 };
 
-const ModuleActions = ({ serverAPI, status, onRefresh, onLogMsg }) => {
+const ModuleActions = ({ status, onRefresh, onLogMsg }) => {
     const [working, setWorking] = SP_REACT.useState(false);
     const isLoaded = status?.is_loaded;
     const isInstalled = status?.is_installed;
@@ -178,9 +217,9 @@ const ModuleActions = ({ serverAPI, status, onRefresh, onLogMsg }) => {
         setWorking(true);
         onLogMsg("Starting cpuid_fault_emulation module...");
         try {
-            const res = await serverAPI.callPluginMethod("start_module", {});
-            if (res.result) {
-                onLogMsg(res.result.message);
+            const res = await startModule();
+            if (res) {
+                onLogMsg(res.message);
             }
         }
         catch (e) {
@@ -195,9 +234,9 @@ const ModuleActions = ({ serverAPI, status, onRefresh, onLogMsg }) => {
         setWorking(true);
         onLogMsg("Stopping cpuid_fault_emulation module...");
         try {
-            const res = await serverAPI.callPluginMethod("stop_module", {});
-            if (res.result) {
-                onLogMsg(res.result.message);
+            const res = await stopModule();
+            if (res) {
+                onLogMsg(res.message);
             }
         }
         catch (e) {
@@ -212,9 +251,9 @@ const ModuleActions = ({ serverAPI, status, onRefresh, onLogMsg }) => {
         setWorking(true);
         onLogMsg(`Initiating module build for ${osType || "system"}...`);
         try {
-            const res = await serverAPI.callPluginMethod("build_and_install_module", {});
-            if (res.result) {
-                onLogMsg(res.result.message);
+            const res = await buildAndInstallModule();
+            if (res) {
+                onLogMsg(res.message);
             }
         }
         catch (e) {
@@ -230,9 +269,9 @@ const ModuleActions = ({ serverAPI, status, onRefresh, onLogMsg }) => {
                 setWorking(true);
                 onLogMsg("Uninstalling module...");
                 try {
-                    const res = await serverAPI.callPluginMethod("uninstall_module", {});
-                    if (res.result) {
-                        onLogMsg(res.result.message);
+                    const res = await uninstallModule();
+                    if (res) {
+                        onLogMsg(res.message);
                     }
                 }
                 catch (e) {
@@ -247,7 +286,7 @@ const ModuleActions = ({ serverAPI, status, onRefresh, onLogMsg }) => {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "Module Controls", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { display: "flex", gap: "8px", width: "100%" }, children: [SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: working || isLoaded || !isInstalled || !vermagicMatch, onClick: handleStart, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#4ade80" }, children: [SP_JSX.jsx(FaPlay, {}), " Start Module"] }) }), SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: working || !isLoaded, onClick: handleStop, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#f87171" }, children: [SP_JSX.jsx(FaStop, {}), " Stop Module"] }) })] }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: working || !sourceExists, onClick: handleBuild, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaTools, {}), " ", isInstalled && !vermagicMatch ? `Rebuild for Kernel ${status?.kernel_release}` : "Build & Install Module"] }) }) }), isInstalled && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: working, onClick: handleUninstall, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#9ca3af" }, children: [SP_JSX.jsx(FaTrash, {}), " Uninstall Module"] }) }) }))] }));
 };
 
-const HvGamesCard = ({ serverAPI, onLogMsg }) => {
+const HvGamesCard = ({ onLogMsg }) => {
     const [shortcuts, setShortcuts] = SP_REACT.useState([]);
     const [selectedAppIds, setSelectedAppIds] = SP_REACT.useState(new Set());
     const [watcherStatus, setWatcherStatus] = SP_REACT.useState({
@@ -259,15 +298,15 @@ const HvGamesCard = ({ serverAPI, onLogMsg }) => {
     const fetchData = async () => {
         try {
             const [shortcutsRes, statusRes] = await Promise.all([
-                serverAPI.callPluginMethod("get_steam_shortcuts", {}),
-                serverAPI.callPluginMethod("get_hv_games_status", {})
+                getSteamShortcuts(),
+                getHvGamesStatus()
             ]);
-            if (shortcutsRes.result) {
-                setShortcuts(shortcutsRes.result);
+            if (shortcutsRes) {
+                setShortcuts(shortcutsRes);
             }
-            if (statusRes.result) {
-                setWatcherStatus(statusRes.result);
-                setSelectedAppIds(new Set(statusRes.result.appids || []));
+            if (statusRes) {
+                setWatcherStatus(statusRes);
+                setSelectedAppIds(new Set(statusRes.appids || []));
             }
         }
         catch (e) {
@@ -294,9 +333,9 @@ const HvGamesCard = ({ serverAPI, onLogMsg }) => {
         }
         setLoading(true);
         try {
-            const res = await serverAPI.callPluginMethod("configure_hv_games", { appids: Array.from(selectedAppIds) });
-            if (res.result) {
-                onLogMsg(res.result.message);
+            const res = await configureHvGames(Array.from(selectedAppIds));
+            if (res) {
+                onLogMsg(res.message);
                 fetchData();
             }
         }
@@ -310,9 +349,9 @@ const HvGamesCard = ({ serverAPI, onLogMsg }) => {
     const handleDisableWatcher = async () => {
         setLoading(true);
         try {
-            const res = await serverAPI.callPluginMethod("disable_hv_games", {});
-            if (res.result) {
-                onLogMsg(res.result.message);
+            const res = await disableHvGames();
+            if (res) {
+                onLogMsg(res.message);
                 fetchData();
             }
         }
@@ -326,15 +365,15 @@ const HvGamesCard = ({ serverAPI, onLogMsg }) => {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "HV Games Automator", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Watcher Status", children: watcherStatus.active ? (SP_JSX.jsxs("span", { style: { color: "#4ade80", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaCheckCircle, {}), " Active (", watcherStatus.appids.length, " game(s))"] })) : watcherStatus.configured ? (SP_JSX.jsxs("span", { style: { color: "#facc15", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaTimesCircle, {}), " Service Inactive"] })) : (SP_JSX.jsx("span", { style: { color: "#9ca3af" }, children: "Disabled" })) }) }), shortcuts.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { padding: "8px", fontSize: "12px", color: "#9ca3af" }, children: "No non-Steam game shortcuts found in Steam shortcuts.vdf files." }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "12px", color: "#d1d5db", marginBottom: "4px" }, children: "Select shortcuts to automatically start/stop the CPUID module on launch/exit:" }) }), shortcuts.map((sc) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: sc.name, description: `AppID: ${sc.appid}`, checked: selectedAppIds.has(sc.appid), onChange: () => toggleAppId(sc.appid) }) }, sc.appid))), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading || selectedAppIds.size === 0, onClick: handleApplyConfig, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaGamepad, {}), " Save & Enable HV Watcher (", selectedAppIds.size, ")"] }) }) })] })), watcherStatus.configured && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: handleDisableWatcher, children: SP_JSX.jsx("span", { style: { color: "#f87171" }, children: "Disable Watcher" }) }) }))] }));
 };
 
-const UmipCard = ({ serverAPI, umipDisabled, onRefresh, onLogMsg }) => {
+const UmipCard = ({ umipDisabled, onRefresh, onLogMsg }) => {
     const [loading, setLoading] = SP_REACT.useState(false);
     const handleDisableUmip = async () => {
         setLoading(true);
         onLogMsg("Adding clearcpuid=514 to kernel arguments...");
         try {
-            const res = await serverAPI.callPluginMethod("disable_umip", {});
-            if (res.result) {
-                onLogMsg(res.result.message);
+            const res = await disableUmip();
+            if (res) {
+                onLogMsg(res.message);
                 onRefresh();
             }
         }
@@ -348,14 +387,94 @@ const UmipCard = ({ serverAPI, umipDisabled, onRefresh, onLogMsg }) => {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "UMIP Kernel Argument", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "clearcpuid=514 State", children: umipDisabled ? (SP_JSX.jsxs("span", { style: { color: "#4ade80", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaCheck, {}), " UMIP Disabled (Present)"] })) : (SP_JSX.jsxs("span", { style: { color: "#facc15", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaExclamationTriangle, {}), " Default (UMIP Active)"] })) }) }), !umipDisabled && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: handleDisableUmip, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaShieldAlt, {}), " Disable UMIP (rpm-ostree kargs)"] }) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { fontSize: "11px", color: "#9ca3af" }, children: ["Disabling UMIP appends ", SP_JSX.jsx("code", { children: "clearcpuid=514" }), " to Bazzite kernel args, allowing instructions like ", SP_JSX.jsx("code", { children: "SIDT" }), "/", SP_JSX.jsx("code", { children: "SGDT" }), " to be emulated without triggering access faults. Requires a reboot after applying."] }) })] }));
 };
 
-const Content = ({ serverAPI }) => {
+const fileName = (path) => path.split("/").pop() || path;
+const PatchCard = ({ onLogMsg }) => {
+    const [games, setGames] = SP_REACT.useState([]);
+    const [selectedGameId, setSelectedGameId] = SP_REACT.useState("");
+    const [exeCandidates, setExeCandidates] = SP_REACT.useState([]);
+    const [selectedExe, setSelectedExe] = SP_REACT.useState("");
+    const [searching, setSearching] = SP_REACT.useState(false);
+    const [patches, setPatches] = SP_REACT.useState([]);
+    const [patchPath, setPatchPath] = SP_REACT.useState("");
+    const [applying, setApplying] = SP_REACT.useState(false);
+    const loadLists = async () => {
+        try {
+            const [gamesRes, patchesRes] = await Promise.all([getPatchableGames(), scanForPatches()]);
+            if (Array.isArray(gamesRes))
+                setGames(gamesRes);
+            if (Array.isArray(patchesRes)) {
+                setPatches(patchesRes);
+                if (patchesRes.length > 0 && !patchPath)
+                    setPatchPath(patchesRes[0].path);
+            }
+        }
+        catch (e) {
+            console.error("Failed to load patch data:", e);
+        }
+    };
+    SP_REACT.useEffect(() => {
+        loadLists();
+    }, []);
+    const selectGame = async (gameId) => {
+        setSelectedGameId(gameId);
+        setExeCandidates([]);
+        setSelectedExe("");
+        const game = games.find((g) => g.id === gameId);
+        if (!game)
+            return;
+        setSearching(true);
+        onLogMsg(`Searching ${game.name} for *-Win64-Shipping.exe...`);
+        try {
+            const res = await findGameShippingExe(game.install_dir, game.exe || "");
+            onLogMsg(res.message);
+            if (res.success && res.candidates.length > 0) {
+                setExeCandidates(res.candidates);
+                setSelectedExe(res.candidates[0]);
+            }
+        }
+        catch (e) {
+            onLogMsg(`Search error: ${e.message || e}`);
+        }
+        finally {
+            setSearching(false);
+        }
+    };
+    const runApply = async () => {
+        setApplying(true);
+        onLogMsg(`Applying ${fileName(patchPath)}...`);
+        try {
+            const res = await applyHvPatch(selectedExe, patchPath);
+            onLogMsg(res.message);
+        }
+        catch (e) {
+            onLogMsg(`Patch error: ${e.message || e}`);
+        }
+        finally {
+            setApplying(false);
+        }
+    };
+    const handleApply = () => {
+        const game = games.find((g) => g.id === selectedGameId);
+        DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Apply HV Patch?", strDescription: `Extract ${fileName(patchPath)} into the folder of ${fileName(selectedExe)} for ${game?.name || "this game"}? Files that get overwritten are backed up to .hv_patch_backup first.`, onOK: runApply }));
+    };
+    const selectedExeDir = selectedExe ? selectedExe.substring(0, selectedExe.lastIndexOf("/")) : "";
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "Custom HV Patch", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Game", strDefaultLabel: games.length ? "Select a game" : "No installed games found", rgOptions: games.map((g) => ({
+                        data: g.id,
+                        label: `${g.name}${g.source === "non-steam" ? " (Non-Steam)" : ""}`
+                    })), selectedOption: selectedGameId, onChange: (opt) => selectGame(opt.data) }) }), selectedGameId && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Shipping EXE", children: searching ? (SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#9ca3af" }, children: [SP_JSX.jsx(FaSearch, {}), " Searching..."] })) : selectedExe ? (SP_JSX.jsx("span", { style: { color: "#4ade80", fontWeight: 600, wordBreak: "break-all" }, children: fileName(selectedExe) })) : (SP_JSX.jsx("span", { style: { color: "#f87171", fontWeight: 600 }, children: "Not Found" })) }) })), exeCandidates.length > 1 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Multiple EXEs found", rgOptions: exeCandidates.map((c) => ({ data: c, label: c })), selectedOption: selectedExe, onChange: (opt) => setSelectedExe(opt.data) }) })), selectedExeDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { fontSize: "11px", color: "#9ca3af", wordBreak: "break-all" }, children: ["Target: ", selectedExeDir] }) })), patches.length > 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Patch Archive", rgOptions: patches.map((p) => ({
+                        data: p.path,
+                        label: `${p.name} (${(p.size / 1024 / 1024).toFixed(1)} MB)`
+                    })), selectedOption: patchPath, onChange: (opt) => setPatchPath(opt.data) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Patch Path (.zip / .7z)", value: patchPath, onChange: (e) => setPatchPath(e.target.value) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying, onClick: loadLists, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaSync, {}), " Rescan Games & Patches"] }) }) }), selectedExeDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => openInDolphin(selectedExeDir), children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFolderOpen, {}), " Open Game Folder in Dolphin"] }) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying || searching || !selectedExe || !patchPath, onClick: handleApply, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileArchive, {}), " ", applying ? "Applying Patch..." : "Apply Patch to Game"] }) }) })] }));
+};
+
+const Content = () => {
     const [status, setStatus] = SP_REACT.useState(null);
     const [logMsg, setLogMsg] = SP_REACT.useState("");
     const refreshStatus = async () => {
         try {
-            const res = await serverAPI.callPluginMethod("get_system_status", {});
-            if (res.result) {
-                setStatus(res.result);
+            const res = await getSystemStatus();
+            if (res) {
+                setStatus(res);
             }
         }
         catch (e) {
@@ -376,13 +495,13 @@ const Content = ({ serverAPI }) => {
                     fontSize: "12px",
                     color: "#e2e8f0",
                     wordBreak: "break-word"
-                }, children: logMsg })), SP_JSX.jsx(ModuleActions, { serverAPI: serverAPI, status: status, onRefresh: refreshStatus, onLogMsg: setLogMsg }), SP_JSX.jsx(ZipSelector, { serverAPI: serverAPI, sourceExists: status?.source_exists || false, onRefresh: refreshStatus, onLogMsg: setLogMsg }), SP_JSX.jsx(HvGamesCard, { serverAPI: serverAPI, onLogMsg: setLogMsg }), SP_JSX.jsx(UmipCard, { serverAPI: serverAPI, umipDisabled: status?.umip_disabled || false, onRefresh: refreshStatus, onLogMsg: setLogMsg })] }));
+                }, children: logMsg })), SP_JSX.jsx(ModuleActions, { status: status, onRefresh: refreshStatus, onLogMsg: setLogMsg }), SP_JSX.jsx(ZipSelector, { sourceExists: status?.source_exists || false, onRefresh: refreshStatus, onLogMsg: setLogMsg }), SP_JSX.jsx(HvGamesCard, { onLogMsg: setLogMsg }), SP_JSX.jsx(PatchCard, { onLogMsg: setLogMsg }), SP_JSX.jsx(UmipCard, { umipDisabled: status?.umip_disabled || false, onRefresh: refreshStatus, onLogMsg: setLogMsg })] }));
 };
-var index = DFL.definePlugin((serverAPI) => {
+var index = DFL.definePlugin(() => {
     return {
         title: SP_JSX.jsx("div", { className: DFL.staticClasses.Title, children: "CPUID & HV Controls" }),
         icon: SP_JSX.jsx(FaMicrochip, {}),
-        content: SP_JSX.jsx(Content, { serverAPI: serverAPI }),
+        content: SP_JSX.jsx(Content, {}),
         onDismount() { }
     };
 });

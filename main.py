@@ -9,6 +9,9 @@ import zipfile
 import logging
 import pwd
 import struct
+import asyncio
+import tempfile
+import time
 
 # Configure logging
 LOG_FILE = "/tmp/decky-hv-control.log"
@@ -19,7 +22,7 @@ logging.basicConfig(
 )
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PLUGIN_DIR = os.path.dirname(SCRIPT_DIR)
+PLUGIN_DIR = os.environ.get("DECKY_PLUGIN_DIR", SCRIPT_DIR)
 MODULE_DIR = os.path.join(PLUGIN_DIR, "cpuid_fault_emulation")
 MODULE_FILE = os.path.join(MODULE_DIR, "cpuid_fault_emulation.ko")
 
@@ -206,6 +209,251 @@ def parse_shortcuts_vdf(vdf_path):
     except Exception as e:
         logging.error(f"Error parsing {vdf_path}: {e}")
     return shortcuts
+
+
+# ---------------------------------------------------------------------------
+# Custom HV patch helpers
+# ---------------------------------------------------------------------------
+
+PATCH_ARCHIVE_EXTS = (".zip", ".7z")
+SHIPPING_EXE_RE = re.compile(r"-Win(64|GDK)-Shipping\.exe$", re.IGNORECASE)
+IGNORED_STEAM_APPS = ("proton", "steam linux runtime", "steamworks common", "steamvr")
+
+
+def get_steam_roots(home):
+    roots = []
+    for p in [os.path.join(home, ".local", "share", "Steam"), os.path.join(home, ".steam", "steam")]:
+        if os.path.isdir(p):
+            real = os.path.realpath(p)
+            if real not in roots:
+                roots.append(real)
+    return roots
+
+
+def read_shortcut_paths(vdf_path):
+    """Returns {appid: {"exe": ..., "start_dir": ...}} from a binary shortcuts.vdf."""
+    result = {}
+    try:
+        with open(vdf_path, "rb") as f:
+            data = f.read()
+    except Exception:
+        return result
+
+    appid_marker = b"\x02appid\x00"
+    starts = []
+    pos = 0
+    while True:
+        idx = data.find(appid_marker, pos)
+        if idx == -1:
+            break
+        starts.append(idx)
+        pos = idx + len(appid_marker)
+
+    for i, idx in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else len(data)
+        segment = data[idx:end]
+        offset = len(appid_marker)
+        if offset + 4 > len(segment):
+            continue
+        appid = str(struct.unpack("<I", segment[offset:offset + 4])[0])
+
+        def read_str(key):
+            m = re.search(b"\\x01" + key + b"\\x00([^\\x00]*)\\x00", segment, re.IGNORECASE)
+            return m.group(1).decode("utf-8", errors="replace").strip().strip('"') if m else ""
+
+        result[appid] = {"exe": read_str(b"exe"), "start_dir": read_str(b"StartDir")}
+    return result
+
+
+def parse_acf_value(text, key):
+    m = re.search(r'"' + key + r'"\s+"([^"]*)"', text, re.IGNORECASE)
+    return m.group(1) if m else ""
+
+
+def list_steam_library_games(home):
+    games = []
+    seen = set()
+    for root in get_steam_roots(home):
+        libraries = [root]
+        lib_vdf = os.path.join(root, "steamapps", "libraryfolders.vdf")
+        try:
+            with open(lib_vdf, "r", errors="replace") as f:
+                for m in re.finditer(r'"path"\s+"([^"]+)"', f.read()):
+                    lib = m.group(1).replace("\\\\", "\\")
+                    if lib not in libraries:
+                        libraries.append(lib)
+        except Exception:
+            pass
+
+        for lib in libraries:
+            steamapps = os.path.join(lib, "steamapps")
+            for manifest in glob.glob(os.path.join(steamapps, "appmanifest_*.acf")):
+                try:
+                    with open(manifest, "r", errors="replace") as f:
+                        text = f.read()
+                except Exception:
+                    continue
+                appid = parse_acf_value(text, "appid")
+                name = parse_acf_value(text, "name")
+                installdir = parse_acf_value(text, "installdir")
+                install_path = os.path.join(steamapps, "common", installdir)
+                if not appid or not installdir or not os.path.isdir(install_path) or appid in seen:
+                    continue
+                if name.lower().startswith(IGNORED_STEAM_APPS):
+                    continue
+                seen.add(appid)
+                games.append({
+                    "id": f"steam:{appid}",
+                    "name": name or installdir,
+                    "source": "steam",
+                    "install_dir": install_path,
+                })
+    return games
+
+
+def list_non_steam_games(home):
+    games = []
+    seen = set()
+    for root in get_steam_roots(home):
+        userdata = os.path.join(root, "userdata")
+        if not os.path.isdir(userdata):
+            continue
+        for user_id in os.listdir(userdata):
+            vdf_file = os.path.join(userdata, user_id, "config", "shortcuts.vdf")
+            if not os.path.isfile(vdf_file):
+                continue
+            paths = read_shortcut_paths(vdf_file)
+            for item in parse_shortcuts_vdf(vdf_file):
+                appid = item["appid"]
+                if appid in seen:
+                    continue
+                info = paths.get(appid, {})
+                exe = info.get("exe", "")
+                install_dir = info.get("start_dir", "") or (os.path.dirname(exe) if exe else "")
+                if not install_dir or not os.path.isdir(install_dir):
+                    continue
+                seen.add(appid)
+                games.append({
+                    "id": f"shortcut:{appid}",
+                    "name": item["name"],
+                    "source": "non-steam",
+                    "install_dir": install_dir,
+                    "exe": exe,
+                })
+    return games
+
+
+def find_shipping_exes(search_dir, exe_hint="", max_depth=6):
+    """Finds Unreal *-Win64-Shipping.exe files, best candidates first."""
+    candidates = []
+    if exe_hint and SHIPPING_EXE_RE.search(os.path.basename(exe_hint)) and os.path.isfile(exe_hint):
+        candidates.append(exe_hint)
+
+    # A StartDir of Binaries/Win64 means the game root is further up
+    norm = search_dir.rstrip("/")
+    if norm.lower().endswith(os.path.join("binaries", "win64")):
+        search_dir = os.path.dirname(os.path.dirname(os.path.dirname(norm))) or norm
+
+    base_depth = search_dir.rstrip("/").count(os.sep)
+    for root, dirs, files in os.walk(search_dir):
+        depth = root.count(os.sep) - base_depth
+        dirs[:] = [d for d in dirs if d.lower() not in ("engine", ".hv_patch_backup", "__pycache__")]
+        if depth >= max_depth:
+            dirs[:] = []
+        for f in files:
+            if SHIPPING_EXE_RE.search(f):
+                full = os.path.join(root, f)
+                if full not in candidates:
+                    candidates.append(full)
+
+    def rank(path):
+        in_binaries = os.path.join("binaries", "win64") in path.lower()
+        return (0 if in_binaries else 1, path.count(os.sep), path)
+
+    return sorted(candidates, key=rank)
+
+
+def safe_extract_zip(archive_path, dest):
+    dest_real = os.path.realpath(dest)
+    with zipfile.ZipFile(archive_path, "r") as zf:
+        for member in zf.infolist():
+            target = os.path.realpath(os.path.join(dest, member.filename))
+            if target != dest_real and not target.startswith(dest_real + os.sep):
+                raise RuntimeError(f"Unsafe path in archive: {member.filename}")
+        zf.extractall(dest)
+
+
+def extract_7z(archive_path, dest):
+    env = os.environ.copy()
+    # Decky's bundled Python sets LD_LIBRARY_PATH, which can break system binaries
+    env.pop("LD_LIBRARY_PATH", None)
+
+    for tool in ("7z", "7zz", "7za"):
+        if command_exists(tool):
+            res = subprocess.run([tool, "x", "-y", f"-o{dest}", archive_path],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+            if res.returncode != 0:
+                raise RuntimeError(f"{tool} failed: {res.stderr.strip() or res.stdout.strip()}")
+            return
+    if command_exists("bsdtar"):
+        res = subprocess.run(["bsdtar", "-xf", archive_path, "-C", dest],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        if res.returncode != 0:
+            raise RuntimeError(f"bsdtar failed: {res.stderr.strip()}")
+        return
+    try:
+        import py7zr
+        with py7zr.SevenZipFile(archive_path, "r") as sz:
+            sz.extractall(dest)
+        return
+    except ImportError:
+        pass
+    raise RuntimeError("No 7z extractor found. Install 7zip (7z/7zz) or bsdtar, or use a .zip patch.")
+
+
+def locate_patch_root(extracted_dir, exe_name):
+    """Works out which folder inside the extracted patch maps onto the shipping exe directory."""
+    exe_lower = exe_name.lower()
+    # 1. The patch ships a copy of the shipping exe: align on its folder
+    for root, _, files in os.walk(extracted_dir):
+        if any(f.lower() == exe_lower for f in files):
+            return root
+    # 2. The patch mirrors the game layout: align on its Binaries/Win64 folder
+    for root, dirs, _ in os.walk(extracted_dir):
+        if root.lower().endswith(os.path.join("binaries", "win64")):
+            return root
+    # 3. Unwrap single top-level wrapper folders
+    current = extracted_dir
+    while True:
+        entries = os.listdir(current)
+        if len(entries) == 1 and os.path.isdir(os.path.join(current, entries[0])):
+            current = os.path.join(current, entries[0])
+        else:
+            return current
+
+
+def copy_patch_tree(src_root, dest_dir, backup_dir, uid, gid):
+    copied = 0
+    backed_up = 0
+    for root, dirs, files in os.walk(src_root):
+        rel = os.path.relpath(root, src_root)
+        target_root = dest_dir if rel == "." else os.path.join(dest_dir, rel)
+        os.makedirs(target_root, exist_ok=True)
+        for f in files:
+            src = os.path.join(root, f)
+            dst = os.path.join(target_root, f)
+            if os.path.isfile(dst):
+                backup_path = os.path.join(backup_dir, os.path.relpath(dst, dest_dir))
+                os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+                shutil.copy2(dst, backup_path)
+                backed_up += 1
+            shutil.copy2(src, dst)
+            try:
+                os.chown(dst, uid, gid)
+            except Exception:
+                pass
+            copied += 1
+    return copied, backed_up
 
 
 class Plugin:
@@ -695,6 +943,84 @@ WantedBy=multi-user.target
         except Exception as e:
             logging.error(f"Disable HV Games failed: {e}")
             return {"success": False, "message": f"Disable failed: {str(e)}"}
+
+    async def get_patchable_games(self):
+        """Lists installed Steam games and non-Steam shortcuts with an install directory."""
+        home = get_user_home(get_invoking_user())
+        try:
+            games = list_steam_library_games(home) + list_non_steam_games(home)
+        except Exception as e:
+            logging.error(f"Failed to list games: {e}")
+            return []
+        return sorted(games, key=lambda g: g["name"].lower())
+
+    async def find_game_shipping_exe(self, install_dir, exe_hint=""):
+        """Finds *-Win64-Shipping.exe candidates inside a game's install directory."""
+        if not install_dir or not os.path.isdir(install_dir):
+            return {"success": False, "message": f"Install directory not found: {install_dir}", "candidates": []}
+        try:
+            candidates = await asyncio.to_thread(find_shipping_exes, install_dir, exe_hint or "")
+        except Exception as e:
+            logging.error(f"Shipping exe search failed: {e}")
+            return {"success": False, "message": f"Search failed: {str(e)}", "candidates": []}
+        if not candidates:
+            return {"success": False, "message": "No *-Win64-Shipping.exe found in this game's files.", "candidates": []}
+        return {"success": True, "message": f"Found {os.path.basename(candidates[0])}", "candidates": candidates}
+
+    async def scan_for_patches(self):
+        """Scans common download locations for .zip/.7z patch archives."""
+        home = get_user_home(get_invoking_user())
+        search_dirs = [os.path.join(home, "Downloads"), os.path.join(home, "Desktop"), home]
+        found = []
+        seen = set()
+        for d in search_dirs:
+            if not os.path.isdir(d):
+                continue
+            for f in os.listdir(d):
+                full = os.path.join(d, f)
+                if f.lower().endswith(PATCH_ARCHIVE_EXTS) and os.path.isfile(full) and full not in seen:
+                    seen.add(full)
+                    found.append({"name": f, "path": full, "size": os.path.getsize(full), "mtime": os.path.getmtime(full)})
+        return sorted(found, key=lambda z: z["mtime"], reverse=True)
+
+    async def apply_hv_patch(self, exe_path, archive_path):
+        """Extracts a patch archive into the directory containing the shipping exe, backing up overwritten files."""
+        if not exe_path or not os.path.isfile(exe_path):
+            return {"success": False, "message": f"Shipping exe not found: {exe_path}"}
+        if not archive_path or not os.path.isfile(archive_path):
+            return {"success": False, "message": f"Patch archive not found: {archive_path}"}
+        if not archive_path.lower().endswith(PATCH_ARCHIVE_EXTS):
+            return {"success": False, "message": "Patch must be a .zip or .7z archive."}
+
+        target_dir = os.path.dirname(exe_path)
+        user_info = pwd.getpwnam(get_invoking_user())
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        backup_dir = os.path.join(target_dir, ".hv_patch_backup", stamp)
+        tmp_dir = tempfile.mkdtemp(prefix="hv-patch-")
+
+        def work():
+            if archive_path.lower().endswith(".zip"):
+                safe_extract_zip(archive_path, tmp_dir)
+            else:
+                extract_7z(archive_path, tmp_dir)
+            patch_root = locate_patch_root(tmp_dir, os.path.basename(exe_path))
+            return copy_patch_tree(patch_root, target_dir, backup_dir, user_info.pw_uid, user_info.pw_gid)
+
+        try:
+            copied, backed_up = await asyncio.to_thread(work)
+        except Exception as e:
+            logging.error(f"Apply patch failed: {e}")
+            return {"success": False, "message": f"Failed to apply patch: {str(e)}"}
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        if copied == 0:
+            return {"success": False, "message": "Patch archive was empty."}
+        msg = f"Applied {os.path.basename(archive_path)}: {copied} file(s) copied into {target_dir}."
+        if backed_up:
+            msg += f" {backed_up} original file(s) backed up to {backup_dir}."
+        logging.info(msg)
+        return {"success": True, "message": msg}
 
 
 if __name__ == "__main__":

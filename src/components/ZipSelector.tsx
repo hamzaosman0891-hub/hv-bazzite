@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, TextField, DropdownItem, Field } from "@decky/ui";
 import { FaFolderOpen, FaFileArchive } from "react-icons/fa";
+import { scanForZips, openInDolphin, extractCpuidZip } from "../lib/api";
 
 interface ZipItem {
   name: string;
@@ -9,24 +10,23 @@ interface ZipItem {
 }
 
 interface ZipSelectorProps {
-  serverAPI: any;
   sourceExists: boolean;
   onRefresh: () => void;
   onLogMsg: (msg: string) => void;
 }
 
-export const ZipSelector: React.FC<ZipSelectorProps> = ({ serverAPI, sourceExists, onRefresh, onLogMsg }) => {
+export const ZipSelector: React.FC<ZipSelectorProps> = ({ sourceExists, onRefresh, onLogMsg }) => {
   const [zipList, setZipList] = useState<ZipItem[]>([]);
   const [selectedPath, setSelectedPath] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
   const scanZips = async () => {
     try {
-      const res = await serverAPI.callPluginMethod("scan_for_zips", {});
-      if (res.result && Array.isArray(res.result)) {
-        setZipList(res.result);
-        if (res.result.length > 0 && !selectedPath) {
-          setSelectedPath(res.result[0].path);
+      const res = await scanForZips();
+      if (res && Array.isArray(res)) {
+        setZipList(res);
+        if (res.length > 0 && !selectedPath) {
+          setSelectedPath(res[0].path);
         }
       }
     } catch (e) {
@@ -41,9 +41,9 @@ export const ZipSelector: React.FC<ZipSelectorProps> = ({ serverAPI, sourceExist
   const handleOpenDolphin = async () => {
     setLoading(true);
     try {
-      const res = await serverAPI.callPluginMethod("open_in_dolphin", { target_path: selectedPath });
-      if (res.result) {
-        onLogMsg(res.result.message);
+      const res = await openInDolphin(selectedPath);
+      if (res) {
+        onLogMsg(res.message);
       }
     } catch (e: any) {
       onLogMsg(`Error opening Dolphin: ${e.message || e}`);
@@ -59,10 +59,10 @@ export const ZipSelector: React.FC<ZipSelectorProps> = ({ serverAPI, sourceExist
     }
     setLoading(true);
     try {
-      const res = await serverAPI.callPluginMethod("extract_cpuid_zip", { zip_path: selectedPath });
-      if (res.result) {
-        onLogMsg(res.result.message);
-        if (res.result.success) {
+      const res = await extractCpuidZip(selectedPath);
+      if (res) {
+        onLogMsg(res.message);
+        if (res.success) {
           onRefresh();
         }
       }
