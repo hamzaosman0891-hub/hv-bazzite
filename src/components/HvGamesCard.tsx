@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { PanelSection, PanelSectionRow, ToggleField, ButtonItem, Field } from "@decky/ui";
 import { FaGamepad, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 import { getSteamShortcuts, getHvGamesStatus, configureHvGames, disableHvGames } from "../lib/api";
+import { logAction } from "../lib/log";
 
 interface ShortcutItem {
   appid: string;
@@ -23,6 +24,7 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ onLogMsg }) => {
   const [loading, setLoading] = useState<boolean>(false);
 
   const fetchData = async () => {
+    logAction("Load Steam shortcuts and watcher status");
     try {
       const [shortcutsRes, statusRes] = await Promise.all([
         getSteamShortcuts(),
@@ -47,6 +49,7 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ onLogMsg }) => {
   }, []);
 
   const toggleAppId = (appid: string) => {
+    logAction("Toggle HV game", appid);
     const next = new Set(selectedAppIds);
     if (next.has(appid)) {
       next.delete(appid);
@@ -57,6 +60,7 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ onLogMsg }) => {
   };
 
   const handleApplyConfig = async () => {
+    logAction("Save & Enable HV Watcher", Array.from(selectedAppIds));
     if (selectedAppIds.size === 0) {
       onLogMsg("Please select at least one game shortcut.");
       return;
@@ -77,6 +81,7 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ onLogMsg }) => {
   };
 
   const handleDisableWatcher = async () => {
+    logAction("Disable Watcher");
     setLoading(true);
     try {
       const res = await disableHvGames();

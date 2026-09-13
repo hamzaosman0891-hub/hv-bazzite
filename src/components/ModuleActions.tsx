@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, ConfirmModal, showModal } from "@decky/ui";
 import { FaPlay, FaStop, FaTools, FaTrash } from "react-icons/fa";
 import { startModule, stopModule, buildAndInstallModule, uninstallModule } from "../lib/api";
+import { logAction } from "../lib/log";
 
 interface ModuleActionsProps {
   status: any;
@@ -19,6 +20,7 @@ export const ModuleActions: React.FC<ModuleActionsProps> = ({ status, onRefresh,
   const osType = status?.os_type;
 
   const handleStart = async () => {
+    logAction("Start Module");
     setWorking(true);
     onLogMsg("Starting cpuid_fault_emulation module...");
     try {
@@ -35,6 +37,7 @@ export const ModuleActions: React.FC<ModuleActionsProps> = ({ status, onRefresh,
   };
 
   const handleStop = async () => {
+    logAction("Stop Module");
     setWorking(true);
     onLogMsg("Stopping cpuid_fault_emulation module...");
     try {
@@ -51,6 +54,7 @@ export const ModuleActions: React.FC<ModuleActionsProps> = ({ status, onRefresh,
   };
 
   const handleBuild = async () => {
+    logAction("Build & Install Module", { os: osType, kernel: status?.kernel_release });
     setWorking(true);
     onLogMsg(`Initiating module build for ${osType || "system"}...`);
     try {
@@ -67,11 +71,13 @@ export const ModuleActions: React.FC<ModuleActionsProps> = ({ status, onRefresh,
   };
 
   const handleUninstall = () => {
+    logAction("Uninstall Module (confirmation shown)");
     showModal(
       <ConfirmModal
         strTitle="Uninstall CPUID Module?"
         strDescription="Are you sure you want to stop and remove the cpuid_fault_emulation kernel module?"
         onOK={async () => {
+          logAction("Uninstall Module confirmed");
           setWorking(true);
           onLogMsg("Uninstalling module...");
           try {

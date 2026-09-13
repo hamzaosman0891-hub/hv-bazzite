@@ -1,7 +1,8 @@
 import { definePlugin, staticClasses } from "@decky/ui";
-import React, { useState, useEffect } from "react";
-import { FaMicrochip, FaHeartbeat, FaFileArchive, FaGamepad, FaWrench, FaShieldAlt } from "react-icons/fa";
+import React, { useState, useEffect, useCallback } from "react";
+import { FaMicrochip, FaHeartbeat, FaFileArchive, FaGamepad, FaWrench, FaShieldAlt, FaListAlt } from "react-icons/fa";
 import { getSystemStatus } from "./lib/api";
+import { log, logAction } from "./lib/log";
 
 import { StatusCard } from "./components/StatusCard";
 import { ZipSelector } from "./components/ZipSelector";
@@ -12,13 +13,15 @@ import { UmipCard } from "./components/UmipCard";
 import { PatchCard } from "./components/PatchCard";
 import { InstalledPatches } from "./components/InstalledPatches";
 import { TabBar, TabDef } from "./components/TabBar";
+import { LogsView } from "./components/LogsView";
 
 const TABS: TabDef[] = [
   { id: "module", label: "Module", icon: <FaHeartbeat /> },
   { id: "source", label: "Source", icon: <FaFileArchive /> },
   { id: "games", label: "Games", icon: <FaGamepad /> },
   { id: "patch", label: "Patch", icon: <FaWrench /> },
-  { id: "umip", label: "UMIP", icon: <FaShieldAlt /> }
+  { id: "umip", label: "UMIP", icon: <FaShieldAlt /> },
+  { id: "logs", label: "Logs", icon: <FaListAlt /> }
 ];
 
 // Remembered across panel open/close, since Content remounts each time
@@ -27,10 +30,17 @@ let lastTab = TABS[0].id;
 const Content: React.FC = () => {
   const [status, setStatus] = useState<any>(null);
   const [logMsg, setLogMsg] = useState<string>("");
+
+  // Every status message shown in the panel also goes to the log
+  const showMsg = useCallback((msg: string) => {
+    log("info", `[status] ${msg}`);
+    setLogMsg(msg);
+  }, []);
   const [activeTab, setActiveTab] = useState<string>(lastTab);
   const [patchesVersion, setPatchesVersion] = useState<number>(0);
 
   const selectTab = (id: string) => {
+    logAction("Switch tab", id);
     lastTab = id;
     setActiveTab(id);
   };
@@ -42,7 +52,7 @@ const Content: React.FC = () => {
         setStatus(res);
       }
     } catch (e) {
-      console.error("Failed to fetch system status:", e);
+      log("error", `Failed to fetch system status: ${(e as any)?.message || e}`);
     }
   };
 
@@ -84,36 +94,38 @@ const Content: React.FC = () => {
           <ModuleActions
             status={status}
             onRefresh={refreshStatus}
-            onLogMsg={setLogMsg}
+            onLogMsg={showMsg}
           />
         </>
       )}
 
       {activeTab === "source" && (
         <>
-          <ModuleImport onRefresh={refreshStatus} onLogMsg={setLogMsg} />
+          <ModuleImport onRefresh={refreshStatus} onLogMsg={showMsg} />
           <ZipSelector
             sourceExists={status?.source_exists || false}
             onRefresh={refreshStatus}
-            onLogMsg={setLogMsg}
+            onLogMsg={showMsg}
           />
         </>
       )}
 
-      {activeTab === "games" && <HvGamesCard onLogMsg={setLogMsg} />}
+      {activeTab === "games" && <HvGamesCard onLogMsg={showMsg} />}
 
       {activeTab === "patch" && (
         <>
-          <PatchCard onLogMsg={setLogMsg} onApplied={() => setPatchesVersion((v) => v + 1)} />
-          <InstalledPatches onLogMsg={setLogMsg} refreshKey={patchesVersion} />
+          <PatchCard onLogMsg={showMsg} onApplied={() => setPatchesVersion((v) => v + 1)} />
+          <InstalledPatches onLogMsg={showMsg} refreshKey={patchesVersion} />
         </>
       )}
+
+      {activeTab === "logs" && <LogsView />}
 
       {activeTab === "umip" && (
         <UmipCard
           umipDisabled={status?.umip_disabled || false}
           onRefresh={refreshStatus}
-          onLogMsg={setLogMsg}
+          onLogMsg={showMsg}
         />
       )}
     </div>
@@ -121,6 +133,7 @@ const Content: React.FC = () => {
 };
 
 export default definePlugin(() => {
+  log("info", "Plugin loaded");
   return {
     title: <div className={staticClasses.Title}>CPUID & HV Controls</div>,
     icon: <FaMicrochip />,

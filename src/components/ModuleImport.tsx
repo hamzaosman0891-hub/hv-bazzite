@@ -3,6 +3,7 @@ import { usePersistentState } from "../lib/persist";
 import { PanelSection, PanelSectionRow, ButtonItem, DropdownItem } from "@decky/ui";
 import { FaFileImport, FaSearch } from "react-icons/fa";
 import { findModuleSources, importModuleSource } from "../lib/api";
+import { logAction } from "../lib/log";
 
 interface ModuleSource {
   path: string;
@@ -25,6 +26,7 @@ export const ModuleImport: React.FC<ModuleImportProps> = ({ onRefresh, onLogMsg 
   const [importing, setImporting] = useState<boolean>(false);
 
   const scan = async () => {
+    logAction("Search for module folders");
     setScanning(true);
     try {
       const res = await findModuleSources();
@@ -46,6 +48,7 @@ export const ModuleImport: React.FC<ModuleImportProps> = ({ onRefresh, onLogMsg 
   }, []);
 
   const handleImport = async () => {
+    logAction("Import Into Plugin", { path: selected });
     setImporting(true);
     onLogMsg(`Importing module from ${selected}...`);
     try {
@@ -76,7 +79,10 @@ export const ModuleImport: React.FC<ModuleImportProps> = ({ onRefresh, onLogMsg 
               label="Found Module Folders"
               rgOptions={sources.map((s) => ({ data: s.path, label: `${s.path} (${describe(s)})` }))}
               selectedOption={selected}
-              onChange={(opt) => setSelected(opt.data)}
+              onChange={(opt) => {
+                logAction("Select module folder", opt.data);
+                setSelected(opt.data);
+              }}
             />
           </PanelSectionRow>
           <PanelSectionRow>

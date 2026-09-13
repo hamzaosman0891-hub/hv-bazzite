@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field } from "@decky/ui";
 import { FaShieldAlt, FaExclamationTriangle, FaCheck } from "react-icons/fa";
 import { disableUmip } from "../lib/api";
+import { logAction } from "../lib/log";
 
 interface UmipProps {
   umipDisabled: boolean;
@@ -13,6 +14,7 @@ export const UmipCard: React.FC<UmipProps> = ({ umipDisabled, onRefresh, onLogMs
   const [loading, setLoading] = useState<boolean>(false);
 
   const handleDisableUmip = async () => {
+    logAction("Disable UMIP");
     setLoading(true);
     onLogMsg("Adding clearcpuid=514 to kernel arguments...");
     try {

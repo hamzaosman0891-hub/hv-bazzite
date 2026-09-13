@@ -3,6 +3,7 @@ import { usePersistentState } from "../lib/persist";
 import { PanelSection, PanelSectionRow, ButtonItem, DropdownItem, Field, ConfirmModal, showModal } from "@decky/ui";
 import { FaTrash, FaClipboardCheck, FaExclamationTriangle } from "react-icons/fa";
 import { listInstalledPatches, checkPatch, removePatch } from "../lib/api";
+import { logAction } from "../lib/log";
 
 interface InstalledPatch {
   id: string;
@@ -34,6 +35,7 @@ export const InstalledPatches: React.FC<InstalledPatchesProps> = ({ onLogMsg, re
   const [working, setWorking] = useState<boolean>(false);
 
   const load = async () => {
+    logAction("Load installed patches");
     try {
       const res = await listInstalledPatches();
       if (Array.isArray(res)) {
@@ -56,12 +58,14 @@ export const InstalledPatches: React.FC<InstalledPatchesProps> = ({ onLogMsg, re
   const selected = patches.find((p) => p.id === selectedId);
 
   const selectPatch = (id: string) => {
+    logAction("Select installed patch", id);
     setSelectedId(id);
     setCheck(null);
     setNeedsForce(false);
   };
 
   const handleCheck = async () => {
+    logAction("Check Patched Files", { id: selectedId });
     setWorking(true);
     try {
       const res = await checkPatch(selectedId);
@@ -75,6 +79,7 @@ export const InstalledPatches: React.FC<InstalledPatchesProps> = ({ onLogMsg, re
   };
 
   const runRemove = async (force: boolean) => {
+    logAction(force ? "Force Remove confirmed" : "Remove Patch confirmed", { id: selectedId });
     setWorking(true);
     onLogMsg(`${force ? "Force removing" : "Removing"} ${selected?.archive_name}...`);
     try {
@@ -91,6 +96,7 @@ export const InstalledPatches: React.FC<InstalledPatchesProps> = ({ onLogMsg, re
   };
 
   const confirmRemove = (force: boolean) => {
+    logAction(`${force ? "Force Remove" : "Remove Patch"} (confirmation shown)`, { id: selectedId });
     if (!selected) return;
     showModal(
       <ConfirmModal

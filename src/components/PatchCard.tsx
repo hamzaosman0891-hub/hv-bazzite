@@ -4,6 +4,7 @@ import { PathField } from "./PathField";
 import { PanelSection, PanelSectionRow, ButtonItem, DropdownItem, Field, ConfirmModal, showModal } from "@decky/ui";
 import { FaFileArchive, FaSearch, FaSync, FaFolderOpen } from "react-icons/fa";
 import { getPatchableGames, findGameShippingExe, scanForPatches, applyHvPatch, openInDolphin } from "../lib/api";
+import { logAction } from "../lib/log";
 
 interface GameItem {
   id: string;
@@ -37,6 +38,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
   const [applying, setApplying] = useState<boolean>(false);
 
   const loadLists = async () => {
+    logAction("Scan games and patch archives");
     try {
       const [gamesRes, patchesRes] = await Promise.all([getPatchableGames(), scanForPatches()]);
       if (Array.isArray(gamesRes)) setGames(gamesRes);
@@ -54,6 +56,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
   }, []);
 
   const selectGame = async (gameId: string) => {
+    logAction("Select game", gameId);
     setSelectedGameId(gameId);
     setExeCandidates([]);
     setSelectedExe("");
@@ -77,6 +80,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
   };
 
   const runApply = async () => {
+    logAction("Apply Patch confirmed", { exe: selectedExe, patch: patchPath });
     setApplying(true);
     onLogMsg(`Applying ${fileName(patchPath)}...`);
     try {
@@ -92,6 +96,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
   };
 
   const handleApply = () => {
+    logAction("Apply Patch to Game (confirmation shown)", { exe: selectedExe, patch: patchPath });
     const game = games.find((g) => g.id === selectedGameId);
     showModal(
       <ConfirmModal
@@ -141,7 +146,10 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
             label="Multiple EXEs found"
             rgOptions={exeCandidates.map((c) => ({ data: c, label: c }))}
             selectedOption={selectedExe}
-            onChange={(opt) => setSelectedExe(opt.data)}
+            onChange={(opt) => {
+              logAction("Select shipping exe", opt.data);
+              setSelectedExe(opt.data);
+            }}
           />
         </PanelSectionRow>
       )}
@@ -163,7 +171,10 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
               label: `${p.name} (${(p.size / 1024 / 1024).toFixed(1)} MB)`
             }))}
             selectedOption={patchPath}
-            onChange={(opt) => setPatchPath(opt.data)}
+            onChange={(opt) => {
+              logAction("Select patch archive", opt.data);
+              setPatchPath(opt.data);
+            }}
           />
         </PanelSectionRow>
       )}
@@ -186,7 +197,10 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
 
       {selectedExeDir && (
         <PanelSectionRow>
-          <ButtonItem layout="below" onClick={() => openInDolphin(selectedExeDir)}>
+          <ButtonItem layout="below" onClick={() => {
+            logAction("Open Game Folder in Dolphin", selectedExeDir);
+            openInDolphin(selectedExeDir).catch(() => {});
+          }}>
             <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <FaFolderOpen /> Open Game Folder in Dolphin
             </span>

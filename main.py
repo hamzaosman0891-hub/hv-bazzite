@@ -15,14 +15,59 @@ import uuid
 import asyncio
 import tempfile
 import time
+import functools
+import inspect
 
-# Configure logging
+# Configure logging. Inside Decky, use its per-plugin logger (shown in Decky's log viewer);
+# when run standalone (the hv-games watcher service), fall back to a file in /tmp.
 LOG_FILE = "/tmp/decky-hv-control.log"
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+try:
+    import decky
+    logger = decky.logger
+    LOG_FILE = getattr(decky, "DECKY_PLUGIN_LOG", LOG_FILE)
+except ImportError:
+    logging.basicConfig(
+        filename=LOG_FILE,
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s"
+    )
+    logger = logging.getLogger("decky-hv-control")
+
+# Polled constantly by the UI; only log these when they fail
+QUIET_METHODS = {"get_system_status", "get_backend_log"}
+
+
+def summarize(value, limit=400):
+    text = repr(value)
+    return text if len(text) <= limit else text[:limit] + f"... ({len(text)} chars)"
+
+
+def log_calls(cls):
+    """Logs every public backend method: arguments, result, failures and duration."""
+    def wrap(name, fn):
+        @functools.wraps(fn)
+        async def wrapper(self, *args, **kwargs):
+            quiet = name in QUIET_METHODS
+            start = time.monotonic()
+            if not quiet:
+                logger.info(f"-> {name} args={summarize(args)} kwargs={summarize(kwargs)}")
+            try:
+                result = await fn(self, *args, **kwargs)
+            except Exception:
+                logger.exception(f"!! {name} raised after {time.monotonic() - start:.2f}s")
+                raise
+            elapsed = time.monotonic() - start
+            if isinstance(result, dict) and result.get("success") is False:
+                logger.warning(f"<- {name} failed in {elapsed:.2f}s: {result.get('message')}")
+            elif not quiet:
+                logger.info(f"<- {name} ok in {elapsed:.2f}s: {summarize(result)}")
+            return result
+        return wrapper
+
+    for name, fn in list(vars(cls).items()):
+        if not name.startswith("_") and inspect.iscoroutinefunction(fn):
+            setattr(cls, name, wrap(name, fn))
+    return cls
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGIN_DIR = os.environ.get("DECKY_PLUGIN_DIR", SCRIPT_DIR)
@@ -234,7 +279,7 @@ def parse_shortcuts_vdf(vdf_path):
                         })
             pos = idx + len(appid_marker)
     except Exception as e:
-        logging.error(f"Error parsing {vdf_path}: {e}")
+        logger.error(f"Error parsing {vdf_path}: {e}")
     return shortcuts
 
 
@@ -640,12 +685,13 @@ def find_module_sources(home, max_depth=3):
     return sorted(found, key=lambda f: (not f["matches_kernel"], not f["has_ko"], f["path"]))
 
 
+@log_calls
 class Plugin:
     async def _main(self):
-        logging.info("Decky HV Control backend started.")
+        logger.info("Decky HV Control backend started.")
 
     async def _unload(self):
-        logging.info("Decky HV Control backend unloaded.")
+        logger.info("Decky HV Control backend unloaded.")
 
     async def get_system_status(self):
         """Returns overall system, module, kernel, OS, and UMIP status."""
@@ -744,50 +790,60 @@ class Plugin:
             subprocess.Popen(exec_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return {"success": True, "message": f"Opened Dolphin at {target_path}"}
         except Exception as e:
-            logging.error(f"Failed to launch Dolphin: {e}")
+            logger.error(f"Failed to launch Dolphin: {e}")
             return {"success": False, "message": f"Failed to launch Dolphin: {str(e)}"}
 
     async def extract_cpuid_zip(self, zip_path):
-        """Extracts cpuid_fault_emulation zip file into plugin directory."""
+        """Extracts the cpuid_fault_emulation zip into the plugin's module folder."""
         if not zip_path or not os.path.isfile(zip_path):
             return {"success": False, "message": f"Zip file not found: {zip_path}"}
+        if not zipfile.is_zipfile(zip_path):
+            return {"success": False, "message": f"Not a valid zip file: {zip_path}"}
+
+        def work():
+            tmp_dir = tempfile.mkdtemp(prefix="hv-module-")
+            try:
+                logger.info(f"Extracting {zip_path} to {tmp_dir}")
+                safe_extract_zip(zip_path, tmp_dir)
+                # The source can sit at the top level or inside any folder name
+                # (cpuid_fault_emulation/, cpuid_fault_emulation-main/, ...): use the shallowest dkms.conf
+                source = None
+                for root, dirs, files in os.walk(tmp_dir):
+                    if "dkms.conf" in files:
+                        if source is None or root.count(os.sep) < source.count(os.sep):
+                            source = root
+                if source is None:
+                    top = sorted(os.listdir(tmp_dir))[:10]
+                    logger.warning(f"No dkms.conf in {zip_path}; top-level entries: {top}")
+                    return None
+                logger.info(f"Found module source at {os.path.relpath(source, tmp_dir)}; copying to {MODULE_DIR}")
+                os.makedirs(MODULE_DIR, exist_ok=True)
+                shutil.copytree(source, MODULE_DIR, dirs_exist_ok=True)
+                chown_tree(MODULE_DIR)
+                return sum(len(files) for _, _, files in os.walk(source))
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
         try:
-            os.makedirs(MODULE_DIR, exist_ok=True)
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                # Check if zip contains subfolder cpuid_fault_emulation or flat files
-                namelist = zip_ref.namelist()
-                has_nested_dir = any(name.startswith("cpuid_fault_emulation/") for name in namelist)
-                
-                if has_nested_dir:
-                    # Extract to temporary directory then move contents
-                    tmp_extract = os.path.join(PLUGIN_DIR, "tmp_extract")
-                    os.makedirs(tmp_extract, exist_ok=True)
-                    zip_ref.extractall(tmp_extract)
-                    extracted_sub = os.path.join(tmp_extract, "cpuid_fault_emulation")
-                    if os.path.isdir(extracted_sub):
-                        for item in os.listdir(extracted_sub):
-                            s = os.path.join(extracted_sub, item)
-                            d = os.path.join(MODULE_DIR, item)
-                            if os.path.isdir(s):
-                                shutil.copytree(s, d, dirs_exist_ok=True)
-                            else:
-                                shutil.copy2(s, d)
-                    shutil.rmtree(tmp_extract, ignore_errors=True)
-                else:
-                    zip_ref.extractall(MODULE_DIR)
-
-            chown_tree(MODULE_DIR)
-
-            # Check for dkms.conf
-            dkms_conf = os.path.join(MODULE_DIR, "dkms.conf")
-            if not os.path.isfile(dkms_conf):
-                return {"success": False, "message": "Zip extracted, but dkms.conf was not found inside."}
-
-            return {"success": True, "message": f"Successfully extracted zip to {MODULE_DIR}"}
+            copied = await asyncio.to_thread(work)
         except Exception as e:
-            logging.error(f"Extract error: {e}")
+            logger.exception("Extract error")
             return {"success": False, "message": f"Failed to extract zip: {str(e)}"}
+
+        if copied is None:
+            return {"success": False, "message": "This zip doesn't contain the cpuid_fault_emulation source (no dkms.conf found)."}
+        return {"success": True, "message": f"Extracted {copied} file(s) to {MODULE_DIR}. Next: Build & Install Module."}
+
+    async def get_backend_log(self, lines=150):
+        """Returns the last lines of the backend log."""
+        try:
+            with open(LOG_FILE, "r", errors="replace") as f:
+                tail = f.readlines()[-int(lines):]
+            return {"success": True, "path": LOG_FILE, "lines": [l.rstrip("\n") for l in tail]}
+        except FileNotFoundError:
+            return {"success": True, "path": LOG_FILE, "lines": []}
+        except Exception as e:
+            return {"success": False, "path": LOG_FILE, "lines": [], "message": f"Could not read log: {str(e)}"}
 
     async def find_module_sources(self):
         """Lists cpuid_fault_emulation folders prepared outside the plugin, e.g. by hv-install.sh."""
@@ -795,7 +851,7 @@ class Plugin:
         try:
             return await asyncio.to_thread(find_module_sources, home)
         except Exception as e:
-            logging.error(f"Module source search failed: {e}")
+            logger.error(f"Module source search failed: {e}")
             return []
 
     async def import_module_source(self, source_dir):
@@ -810,7 +866,7 @@ class Plugin:
             await asyncio.to_thread(shutil.copytree, source_dir, MODULE_DIR, dirs_exist_ok=True)
             chown_tree(MODULE_DIR)
         except Exception as e:
-            logging.error(f"Import failed: {e}")
+            logger.error(f"Import failed: {e}")
             return {"success": False, "message": f"Import failed: {str(e)}"}
 
         if not os.path.isfile(MODULE_FILE):
@@ -850,14 +906,14 @@ class Plugin:
                 run_cmd(["mkdir", "-p", build_container_dir], check=True, user=user)
 
                 if os.path.isdir(os.path.join(checkout_dir, ".git")):
-                    logging.info(f"Updating {repo_name}...")
+                    logger.info(f"Updating {repo_name}...")
                     run_cmd(["git", "-C", checkout_dir, "pull", "--ff-only"], user=user)
                 else:
-                    logging.info(f"Cloning {repo_name}...")
+                    logger.info(f"Cloning {repo_name}...")
                     run_cmd(["git", "clone", "--depth", "1", repo_url, checkout_dir], check=True, user=user)
 
                 # Build Podman image
-                logging.info(f"Building Podman image {image_name}...")
+                logger.info(f"Building Podman image {image_name}...")
                 build_script = os.path.join(checkout_dir, "build.sh")
                 if not os.path.isfile(build_script):
                     return {"success": False, "message": f"build.sh not found in {checkout_dir}"}
@@ -869,7 +925,7 @@ class Plugin:
                 )
 
                 # Run podman container to compile .ko
-                logging.info(f"Compiling cpuid_fault_emulation.ko for kernel {os.uname().release}...")
+                logger.info(f"Compiling cpuid_fault_emulation.ko for kernel {os.uname().release}...")
                 mounts = []
                 if gaming_os == "steamos":
                     mounts = ["-v", "/etc:/host/etc:ro"]
@@ -892,7 +948,7 @@ class Plugin:
                 return {"success": True, "message": f"Module cpuid_fault_emulation.ko compiled successfully for {os.uname().release}!"}
 
             except Exception as e:
-                logging.error(f"Container build failed: {e}")
+                logger.error(f"Container build failed: {e}")
                 return {"success": False, "message": f"Build failed: {str(e)}"}
         else:
             # DKMS build
@@ -909,7 +965,7 @@ class Plugin:
                 run_cmd(["dkms", "install", "cpuid_fault_emulation/0.1", "--force"], check=True)
                 return {"success": True, "message": "cpuid_fault_emulation DKMS module installed successfully!"}
             except Exception as e:
-                logging.error(f"DKMS build failed: {e}")
+                logger.error(f"DKMS build failed: {e}")
                 return {"success": False, "message": f"DKMS install failed: {str(e)}"}
 
     async def start_module(self):
@@ -947,7 +1003,7 @@ class Plugin:
                 return {"success": False, "message": "Module insmod succeeded but is not listed in /proc/modules."}
 
         except Exception as e:
-            logging.error(f"Start module failed: {e}")
+            logger.error(f"Start module failed: {e}")
             return {"success": False, "message": f"Start failed: {str(e)}"}
 
     async def stop_module(self):
@@ -974,7 +1030,7 @@ class Plugin:
                 return {"success": False, "message": "Module rmmod executed but module is still loaded."}
 
         except Exception as e:
-            logging.error(f"Stop module failed: {e}")
+            logger.error(f"Stop module failed: {e}")
             return {"success": False, "message": f"Stop failed: {str(e)}"}
 
     async def disable_umip(self):
@@ -1023,7 +1079,7 @@ class Plugin:
                 return {"success": False, "message": "Unsupported bootloader setup for automatic UMIP disabling."}
 
         except Exception as e:
-            logging.error(f"Disable UMIP failed: {e}")
+            logger.error(f"Disable UMIP failed: {e}")
             return {"success": False, "message": f"Disable UMIP failed: {str(e)}"}
 
     async def uninstall_module(self):
@@ -1047,7 +1103,7 @@ class Plugin:
                 return {"success": True, "message": "DKMS module uninstalled."}
 
         except Exception as e:
-            logging.error(f"Uninstall failed: {e}")
+            logger.error(f"Uninstall failed: {e}")
             return {"success": False, "message": f"Uninstall failed: {str(e)}"}
 
     async def get_steam_shortcuts(self):
@@ -1145,7 +1201,7 @@ WantedBy=multi-user.target
 
             return {"success": True, "message": f"HV Games watcher enabled for {len(appids)} shortcut(s)!"}
         except Exception as e:
-            logging.error(f"Configure HV Games failed: {e}")
+            logger.error(f"Configure HV Games failed: {e}")
             return {"success": False, "message": f"Failed to configure HV Games service: {str(e)}"}
 
     async def disable_hv_games(self):
@@ -1154,7 +1210,7 @@ WantedBy=multi-user.target
             run_cmd(["systemctl", "disable", "--now", "hv-games.service"])
             return {"success": True, "message": "HV Games watcher disabled."}
         except Exception as e:
-            logging.error(f"Disable HV Games failed: {e}")
+            logger.error(f"Disable HV Games failed: {e}")
             return {"success": False, "message": f"Disable failed: {str(e)}"}
 
     async def get_patchable_games(self):
@@ -1163,7 +1219,7 @@ WantedBy=multi-user.target
         try:
             games = list_steam_library_games(home) + list_non_steam_games(home)
         except Exception as e:
-            logging.error(f"Failed to list games: {e}")
+            logger.error(f"Failed to list games: {e}")
             return []
         return sorted(games, key=lambda g: g["name"].lower())
 
@@ -1174,7 +1230,7 @@ WantedBy=multi-user.target
         try:
             candidates = await asyncio.to_thread(find_shipping_exes, install_dir, exe_hint or "")
         except Exception as e:
-            logging.error(f"Shipping exe search failed: {e}")
+            logger.error(f"Shipping exe search failed: {e}")
             return {"success": False, "message": f"Search failed: {str(e)}", "candidates": []}
         if not candidates:
             return {"success": False, "message": "No *-Win64-Shipping.exe found in this game's files.", "candidates": []}
@@ -1242,7 +1298,7 @@ WantedBy=multi-user.target
         try:
             await asyncio.to_thread(work)
         except Exception as e:
-            logging.error(f"Apply patch failed: {e}")
+            logger.error(f"Apply patch failed: {e}")
             return {"success": False, "message": f"Failed to apply patch (changes rolled back): {str(e)}"}
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -1254,7 +1310,7 @@ WantedBy=multi-user.target
         if replaced:
             msg += f" {replaced} original file(s) backed up."
         msg += " You can remove it from Installed Patches."
-        logging.info(msg)
+        logger.info(msg)
         return {"success": True, "message": msg}
 
     async def list_installed_patches(self):
@@ -1297,7 +1353,7 @@ WantedBy=multi-user.target
         try:
             removed, restored, skipped = await asyncio.to_thread(revert_patch_files, manifest, bool(force))
         except Exception as e:
-            logging.error(f"Remove patch failed: {e}")
+            logger.error(f"Remove patch failed: {e}")
             return {"success": False, "message": f"Failed to remove patch: {str(e)}"}
 
         if skipped:
@@ -1315,7 +1371,7 @@ WantedBy=multi-user.target
         cleanup_backup_dir(manifest.get("backup_dir", ""))
         os.remove(os.path.join(PATCH_DB_DIR, patch_id + ".json"))
         msg = f"Removed {manifest['archive_name']}: deleted {removed} added file(s), restored {restored} original file(s)."
-        logging.info(msg)
+        logger.info(msg)
         return {"success": True, "message": msg}
 
 if __name__ == "__main__":
@@ -1328,7 +1384,7 @@ if __name__ == "__main__":
         appids_env = os.environ.get("HV_GAME_APPIDS", "").split()
         log_file = os.environ.get("HV_STEAM_LOG", "")
 
-        logging.info(f"Watcher started for AppIDs {appids_env} monitoring {log_file}")
+        logger.info(f"Watcher started for AppIDs {appids_env} monitoring {log_file}")
         
         tracked = set()
         owns_module = False

@@ -4,6 +4,7 @@ import { PathField } from "./PathField";
 import { PanelSection, PanelSectionRow, ButtonItem, DropdownItem, Field } from "@decky/ui";
 import { FaFolderOpen, FaFileArchive } from "react-icons/fa";
 import { scanForZips, openInDolphin, extractCpuidZip } from "../lib/api";
+import { logAction } from "../lib/log";
 
 interface ZipItem {
   name: string;
@@ -23,6 +24,7 @@ export const ZipSelector: React.FC<ZipSelectorProps> = ({ sourceExists, onRefres
   const [loading, setLoading] = useState<boolean>(false);
 
   const scanZips = async () => {
+    logAction("Scan for zip files");
     try {
       const res = await scanForZips();
       if (res && Array.isArray(res)) {
@@ -40,6 +42,7 @@ export const ZipSelector: React.FC<ZipSelectorProps> = ({ sourceExists, onRefres
   }, []);
 
   const handleOpenDolphin = async () => {
+    logAction("Open Location in Dolphin", { path: selectedPath });
     setLoading(true);
     try {
       const res = await openInDolphin(selectedPath);
@@ -54,11 +57,13 @@ export const ZipSelector: React.FC<ZipSelectorProps> = ({ sourceExists, onRefres
   };
 
   const handleExtractZip = async () => {
+    logAction("Extract & Prepare Zip", { path: selectedPath });
     if (!selectedPath) {
       onLogMsg("Please select or enter a path to cpuid_fault_emulation.zip");
       return;
     }
     setLoading(true);
+    onLogMsg(`Extracting ${selectedPath}...`);
     try {
       const res = await extractCpuidZip(selectedPath);
       if (res) {
@@ -95,7 +100,10 @@ export const ZipSelector: React.FC<ZipSelectorProps> = ({ sourceExists, onRefres
               label: `${z.name} (${(z.size / 1024 / 1024).toFixed(1)} MB)`
             }))}
             selectedOption={selectedPath}
-            onChange={(opt) => setSelectedPath(opt.data)}
+            onChange={(opt) => {
+              logAction("Select zip file", opt.data);
+              setSelectedPath(opt.data);
+            }}
           />
         </PanelSectionRow>
       )}
