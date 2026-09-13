@@ -545,6 +545,54 @@ def extract_with_tools(archive_path, dest):
     raise RuntimeError(f"No {kind} extractor found. Install {tools}, or use a .zip patch.")
 
 
+def extract_any(archive_path, dest):
+    """Extracts one archive of any supported type into dest."""
+    if archive_path.lower().endswith(".zip"):
+        safe_extract_zip(archive_path, dest)
+    else:
+        extract_with_tools(archive_path, dest)
+
+
+def extract_archive_recursive(archive_path, dest, max_depth=4):
+    """Extracts an archive, then any archives packed inside it, and so on.
+
+    Each nested archive is unpacked into a folder next to it (named after the archive) and the
+    archive file is then deleted, so the final tree contains only the real patch files.
+    """
+    extract_any(archive_path, dest)
+    _extract_nested(dest, max_depth)
+
+
+def _extract_nested(root, depth):
+    if depth <= 0:
+        return
+    nested = []
+    for dirpath, dirs, files in os.walk(root):
+        for f in files:
+            if f.lower().endswith(PATCH_ARCHIVE_EXTS):
+                nested.append(os.path.join(dirpath, f))
+    for archive in nested:
+        if not os.path.isfile(archive):
+            continue
+        base = os.path.basename(archive)
+        # Unpack "Patch.zip" into a "Patch" folder beside it, avoiding a name clash
+        out = os.path.join(os.path.dirname(archive), os.path.splitext(base)[0])
+        suffix = 1
+        while os.path.exists(out):
+            out = os.path.join(os.path.dirname(archive), f"{os.path.splitext(base)[0]}_{suffix}")
+            suffix += 1
+        os.makedirs(out, exist_ok=True)
+        logger.info(f"Extracting nested archive {base} -> {os.path.basename(out)}/")
+        try:
+            extract_any(archive, out)
+        except Exception as e:
+            logger.warning(f"Could not extract nested archive {base}: {e}")
+            shutil.rmtree(out, ignore_errors=True)
+            continue
+        os.remove(archive)
+        _extract_nested(out, depth - 1)
+
+
 def locate_patch_root(extracted_dir, exe_name):
     """Works out which folder inside the extracted patch maps onto the shipping exe directory."""
     exe_lower = exe_name.lower()
@@ -1735,10 +1783,7 @@ class Plugin:
         logger.info(f"Applying {archive_path} to {target_dir} ({'manual folder' if exe_path is None else 'next to ' + exe_path})")
 
         def work():
-            if archive_path.lower().endswith(".zip"):
-                safe_extract_zip(archive_path, tmp_dir)
-            else:
-                extract_with_tools(archive_path, tmp_dir)
+            extract_archive_recursive(archive_path, tmp_dir)
             if exe_path:
                 patch_root = locate_patch_root(tmp_dir, os.path.basename(exe_path))
             else:
