@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { PanelSection, PanelSectionRow, ToggleField, ButtonItem, Field } from "@decky/ui";
 import { FaGamepad, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
-import { getSteamShortcuts, getHvGamesStatus, configureHvGames, disableHvGames } from "../lib/api";
+import { getHvGameCandidates, getHvGamesStatus, configureHvGames, disableHvGames } from "../lib/api";
 import { logAction } from "../lib/log";
 
 interface ShortcutItem {
   appid: string;
   name: string;
+  source: "steam" | "non-steam";
 }
 
 interface HvGamesProps {
@@ -24,10 +25,10 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ onLogMsg }) => {
   const [loading, setLoading] = useState<boolean>(false);
 
   const fetchData = async () => {
-    logAction("Load Steam shortcuts and watcher status");
+    logAction("Load games and watcher status");
     try {
       const [shortcutsRes, statusRes] = await Promise.all([
-        getSteamShortcuts(),
+        getHvGameCandidates(),
         getHvGamesStatus()
       ]);
 
@@ -62,7 +63,7 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ onLogMsg }) => {
   const handleApplyConfig = async () => {
     logAction("Save & Enable HV Watcher", Array.from(selectedAppIds));
     if (selectedAppIds.size === 0) {
-      onLogMsg("Please select at least one game shortcut.");
+      onLogMsg("Please select at least one game.");
       return;
     }
 
@@ -117,14 +118,14 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ onLogMsg }) => {
       {shortcuts.length === 0 ? (
         <PanelSectionRow>
           <div style={{ padding: "8px", fontSize: "12px", color: "#9ca3af" }}>
-            No non-Steam game shortcuts found in Steam shortcuts.vdf files.
+            No installed Steam games or non-Steam shortcuts found.
           </div>
         </PanelSectionRow>
       ) : (
         <>
           <PanelSectionRow>
             <div style={{ fontSize: "12px", color: "#d1d5db", marginBottom: "4px" }}>
-              Select shortcuts to automatically start/stop the CPUID module on launch/exit:
+              Select Steam or non-Steam games to automatically start/stop the CPUID module on launch/exit:
             </div>
           </PanelSectionRow>
 
@@ -132,7 +133,7 @@ export const HvGamesCard: React.FC<HvGamesProps> = ({ onLogMsg }) => {
             <PanelSectionRow key={sc.appid}>
               <ToggleField
                 label={sc.name}
-                description={`AppID: ${sc.appid}`}
+                description={`${sc.source === "steam" ? "Steam" : "Non-Steam"} · AppID ${sc.appid}`}
                 checked={selectedAppIds.has(sc.appid)}
                 onChange={() => toggleAppId(sc.appid)}
               />

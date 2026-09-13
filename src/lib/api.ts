@@ -60,6 +60,7 @@ export const stopModule = loggedCallable<[], any>("stop_module");
 export const disableUmip = loggedCallable<[], any>("disable_umip");
 export const uninstallModule = loggedCallable<[], any>("uninstall_module");
 export const getSteamShortcuts = loggedCallable<[], any>("get_steam_shortcuts");
+export const getHvGameCandidates = loggedCallable<[], any>("get_hv_game_candidates");
 export const getHvGamesStatus = loggedCallable<[], any>("get_hv_games_status");
 export const configureHvGames = loggedCallable<[appids: string[]], any>("configure_hv_games");
 export const disableHvGames = loggedCallable<[], any>("disable_hv_games");

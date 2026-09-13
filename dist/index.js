@@ -217,7 +217,8 @@ const startModule = loggedCallable("start_module");
 const stopModule = loggedCallable("stop_module");
 const disableUmip = loggedCallable("disable_umip");
 const uninstallModule = loggedCallable("uninstall_module");
-const getSteamShortcuts = loggedCallable("get_steam_shortcuts");
+loggedCallable("get_steam_shortcuts");
+const getHvGameCandidates = loggedCallable("get_hv_game_candidates");
 const getHvGamesStatus = loggedCallable("get_hv_games_status");
 const configureHvGames = loggedCallable("configure_hv_games");
 const disableHvGames = loggedCallable("disable_hv_games");
@@ -503,10 +504,10 @@ const HvGamesCard = ({ onLogMsg }) => {
     });
     const [loading, setLoading] = SP_REACT.useState(false);
     const fetchData = async () => {
-        logAction("Load Steam shortcuts and watcher status");
+        logAction("Load games and watcher status");
         try {
             const [shortcutsRes, statusRes] = await Promise.all([
-                getSteamShortcuts(),
+                getHvGameCandidates(),
                 getHvGamesStatus()
             ]);
             if (shortcutsRes) {
@@ -538,7 +539,7 @@ const HvGamesCard = ({ onLogMsg }) => {
     const handleApplyConfig = async () => {
         logAction("Save & Enable HV Watcher", Array.from(selectedAppIds));
         if (selectedAppIds.size === 0) {
-            onLogMsg("Please select at least one game shortcut.");
+            onLogMsg("Please select at least one game.");
             return;
         }
         setLoading(true);
@@ -573,7 +574,7 @@ const HvGamesCard = ({ onLogMsg }) => {
             setLoading(false);
         }
     };
-    return (SP_JSX.jsxs(DFL.PanelSection, { title: "HV Games Automator", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Watcher Status", children: watcherStatus.active ? (SP_JSX.jsxs("span", { style: { color: "#4ade80", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaCheckCircle, {}), " Active (", watcherStatus.appids.length, " game(s))"] })) : watcherStatus.configured ? (SP_JSX.jsxs("span", { style: { color: "#facc15", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaTimesCircle, {}), " Service Inactive"] })) : (SP_JSX.jsx("span", { style: { color: "#9ca3af" }, children: "Disabled" })) }) }), shortcuts.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { padding: "8px", fontSize: "12px", color: "#9ca3af" }, children: "No non-Steam game shortcuts found in Steam shortcuts.vdf files." }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "12px", color: "#d1d5db", marginBottom: "4px" }, children: "Select shortcuts to automatically start/stop the CPUID module on launch/exit:" }) }), shortcuts.map((sc) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: sc.name, description: `AppID: ${sc.appid}`, checked: selectedAppIds.has(sc.appid), onChange: () => toggleAppId(sc.appid) }) }, sc.appid))), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading || selectedAppIds.size === 0, onClick: handleApplyConfig, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaGamepad, {}), " Save & Enable HV Watcher (", selectedAppIds.size, ")"] }) }) })] })), watcherStatus.configured && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: handleDisableWatcher, children: SP_JSX.jsx("span", { style: { color: "#f87171" }, children: "Disable Watcher" }) }) }))] }));
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "HV Games Automator", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Watcher Status", children: watcherStatus.active ? (SP_JSX.jsxs("span", { style: { color: "#4ade80", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaCheckCircle, {}), " Active (", watcherStatus.appids.length, " game(s))"] })) : watcherStatus.configured ? (SP_JSX.jsxs("span", { style: { color: "#facc15", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaTimesCircle, {}), " Service Inactive"] })) : (SP_JSX.jsx("span", { style: { color: "#9ca3af" }, children: "Disabled" })) }) }), shortcuts.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { padding: "8px", fontSize: "12px", color: "#9ca3af" }, children: "No installed Steam games or non-Steam shortcuts found." }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "12px", color: "#d1d5db", marginBottom: "4px" }, children: "Select Steam or non-Steam games to automatically start/stop the CPUID module on launch/exit:" }) }), shortcuts.map((sc) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: sc.name, description: `${sc.source === "steam" ? "Steam" : "Non-Steam"} · AppID ${sc.appid}`, checked: selectedAppIds.has(sc.appid), onChange: () => toggleAppId(sc.appid) }) }, sc.appid))), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading || selectedAppIds.size === 0, onClick: handleApplyConfig, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaGamepad, {}), " Save & Enable HV Watcher (", selectedAppIds.size, ")"] }) }) })] })), watcherStatus.configured && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: handleDisableWatcher, children: SP_JSX.jsx("span", { style: { color: "#f87171" }, children: "Disable Watcher" }) }) }))] }));
 };
 
 const UmipCard = ({ umipDisabled, onRefresh, onLogMsg }) => {

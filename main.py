@@ -9,6 +9,7 @@ import zipfile
 import logging
 import pwd
 import struct
+import stat
 import hashlib
 import json
 import uuid
@@ -71,8 +72,25 @@ def log_calls(cls):
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGIN_DIR = os.environ.get("DECKY_PLUGIN_DIR", SCRIPT_DIR)
-MODULE_DIR = os.path.join(PLUGIN_DIR, "cpuid_fault_emulation")
+# Older versions kept the module inside the plugin folder, which Decky deletes on uninstall/update
+LEGACY_MODULE_DIR = os.path.join(PLUGIN_DIR, "cpuid_fault_emulation")
+
+
+def resolve_module_dir():
+    # The hv-games watcher service runs outside Decky and gets the location passed explicitly
+    explicit = os.environ.get("HV_MODULE_DIR")
+    if explicit:
+        return explicit
+    # Decky keeps a plugin's settings folder across uninstalls and updates
+    settings_dir = os.environ.get("DECKY_PLUGIN_SETTINGS_DIR")
+    if settings_dir:
+        return os.path.join(settings_dir, "cpuid_fault_emulation")
+    return LEGACY_MODULE_DIR
+
+
+MODULE_DIR = resolve_module_dir()
 MODULE_FILE = os.path.join(MODULE_DIR, "cpuid_fault_emulation.ko")
+HV_GAMES_SERVICE = "/etc/systemd/system/hv-games.service"
 
 
 def get_invoking_user():
@@ -685,10 +703,125 @@ def find_module_sources(home, max_depth=3):
     return sorted(found, key=lambda f: (not f["matches_kernel"], not f["has_ko"], f["path"]))
 
 
+def migrate_legacy_module_dir():
+    """Moves a module folder from the plugin folder into the persistent settings folder."""
+    if os.path.realpath(MODULE_DIR) == os.path.realpath(LEGACY_MODULE_DIR) or not os.path.isdir(LEGACY_MODULE_DIR):
+        return
+    if os.path.isfile(os.path.join(MODULE_DIR, "dkms.conf")):
+        logger.info(f"Module already present in {MODULE_DIR}; leaving legacy folder {LEGACY_MODULE_DIR} untouched")
+        return
+    logger.info(f"Migrating module folder {LEGACY_MODULE_DIR} -> {MODULE_DIR}")
+    os.makedirs(MODULE_DIR, exist_ok=True)
+    shutil.copytree(LEGACY_MODULE_DIR, MODULE_DIR, dirs_exist_ok=True)
+    chown_tree(MODULE_DIR)
+    shutil.rmtree(LEGACY_MODULE_DIR, ignore_errors=True)
+    logger.info("Module folder migration complete")
+
+
+def ensure_module_dir(user=None):
+    """Creates the module folder owned by the desktop user and makes sure that user can reach it.
+
+    Rootless Podman runs as the desktop user and bind-mounts this folder, so every parent folder
+    Decky created as root needs the search (x) bit for others. Only x is added: contents stay unlistable.
+    """
+    user = user or get_invoking_user()
+    os.makedirs(MODULE_DIR, exist_ok=True)
+    chown_tree(MODULE_DIR, user)
+    home = os.path.realpath(get_user_home(user))
+    parent = os.path.dirname(os.path.realpath(MODULE_DIR))
+    while parent.startswith(home + os.sep):
+        try:
+            st = os.stat(parent)
+            if st.st_uid == 0 and not st.st_mode & stat.S_IXOTH:
+                os.chmod(parent, st.st_mode | stat.S_IXOTH)
+                logger.info(f"Added search permission to {parent} so {user} can reach the module folder")
+        except Exception as e:
+            logger.warning(f"Could not check permissions on {parent}: {e}")
+        parent = os.path.dirname(parent)
+
+
+def parse_game_process_line(line):
+    """Parses a Steam gameprocess_log.txt line.
+
+    Returns (appid, key, adding) or None. Steam games log their plain AppID; non-Steam shortcuts log a
+    64-bit game ID whose upper 32 bits are the shortcut AppID.
+    """
+    m = re.search(r"AppID\s+([0-9]+)\s+adding\s+PID\s+([0-9]+)\s+as\s+a\s+tracked\s+process", line)
+    adding = True
+    if not m:
+        m = re.search(r"AppID\s+([0-9]+)\s+no\s+longer\s+tracking\s+PID\s+([0-9]+)", line)
+        adding = False
+    if not m:
+        return None
+    game_id = int(m.group(1))
+    appid = (game_id >> 32) & 0xffffffff if game_id > 0xffffffff else game_id
+    return str(appid), f"{game_id}:{m.group(2)}", adding
+
+
+def build_hv_games_service(appids, log_path):
+    appids_str = " ".join(str(a) for a in appids)
+    return f"""[Unit]
+Description=CPUID Fault Emulation Steam game watcher
+After=local-fs.target
+
+[Service]
+Type=simple
+Environment="HV_GAME_APPIDS={appids_str}"
+Environment="HV_STEAM_LOG={log_path}"
+Environment="HV_MODULE_DIR={MODULE_DIR}"
+ExecStart={sys.executable} {os.path.abspath(__file__)} --hv-games-watch
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def read_hv_games_service_env():
+    env = {}
+    try:
+        with open(HV_GAMES_SERVICE, "r") as f:
+            for line in f:
+                m = re.match(r'^Environment="([A-Z_]+)=(.*)"\s*$', line.strip())
+                if m:
+                    env[m.group(1)] = m.group(2)
+    except FileNotFoundError:
+        pass
+    return env
+
+
+def refresh_hv_games_service():
+    """Rewrites an existing watcher service so it points at the current main.py and module folder."""
+    if not os.path.isfile(HV_GAMES_SERVICE):
+        return
+    env = read_hv_games_service_env()
+    appids = env.get("HV_GAME_APPIDS", "").split()
+    if not appids or not env.get("HV_STEAM_LOG"):
+        return
+    wanted = build_hv_games_service(appids, env["HV_STEAM_LOG"])
+    with open(HV_GAMES_SERVICE, "r") as f:
+        if f.read() == wanted:
+            return
+    logger.info("Updating hv-games.service to the current plugin and module paths")
+    with open(HV_GAMES_SERVICE, "w") as f:
+        f.write(wanted)
+    run_cmd(["systemctl", "daemon-reload"])
+    run_cmd(["systemctl", "try-restart", "hv-games.service"])
+
+
 @log_calls
 class Plugin:
     async def _main(self):
-        logger.info("Decky HV Control backend started.")
+        logger.info(f"Decky HV Control backend started. Module folder: {MODULE_DIR}")
+        try:
+            await asyncio.to_thread(migrate_legacy_module_dir)
+        except Exception:
+            logger.exception("Module folder migration failed")
+        try:
+            await asyncio.to_thread(refresh_hv_games_service)
+        except Exception:
+            logger.exception("Updating hv-games.service failed")
 
     async def _unload(self):
         logger.info("Decky HV Control backend unloaded.")
@@ -817,7 +950,7 @@ class Plugin:
                     logger.warning(f"No dkms.conf in {zip_path}; top-level entries: {top}")
                     return None
                 logger.info(f"Found module source at {os.path.relpath(source, tmp_dir)}; copying to {MODULE_DIR}")
-                os.makedirs(MODULE_DIR, exist_ok=True)
+                ensure_module_dir()
                 shutil.copytree(source, MODULE_DIR, dirs_exist_ok=True)
                 chown_tree(MODULE_DIR)
                 return sum(len(files) for _, _, files in os.walk(source))
@@ -863,6 +996,7 @@ class Plugin:
         if module_loaded():
             return {"success": False, "message": "Stop the running module before importing."}
         try:
+            await asyncio.to_thread(ensure_module_dir)
             await asyncio.to_thread(shutil.copytree, source_dir, MODULE_DIR, dirs_exist_ok=True)
             chown_tree(MODULE_DIR)
         except Exception as e:
@@ -900,7 +1034,9 @@ class Plugin:
             image_name = repo_name
 
             try:
-                chown_tree(MODULE_DIR, user)
+                ensure_module_dir(user)
+                if run_cmd(["test", "-w", MODULE_DIR], user=user).returncode != 0:
+                    return {"success": False, "message": f"{user} cannot write to {MODULE_DIR}, so Podman can't save the compiled module. Check the folder's permissions."}
 
                 # Ensure build directory as user
                 run_cmd(["mkdir", "-p", build_container_dir], check=True, user=user)
@@ -1132,6 +1268,27 @@ class Plugin:
 
         return found_shortcuts
 
+    async def get_hv_game_candidates(self):
+        """Lists installed Steam games and non-Steam shortcuts the watcher can react to."""
+        home = get_user_home(get_invoking_user())
+        games = {}
+        try:
+            for g in list_steam_library_games(home):
+                appid = g["id"].split(":", 1)[1]
+                games.setdefault(appid, {"appid": appid, "name": g["name"], "source": "steam"})
+        except Exception:
+            logger.exception("Listing Steam library games failed")
+        # Include every shortcut, even ones whose folder can't be resolved
+        for s_path in get_steam_roots(home):
+            userdata = os.path.join(s_path, "userdata")
+            if not os.path.isdir(userdata):
+                continue
+            for user_id in os.listdir(userdata):
+                vdf_file = os.path.join(userdata, user_id, "config", "shortcuts.vdf")
+                for item in parse_shortcuts_vdf(vdf_file):
+                    games.setdefault(item["appid"], {"appid": item["appid"], "name": item["name"], "source": "non-steam"})
+        return sorted(games.values(), key=lambda g: (g["name"].lower(), g["appid"]))
+
     async def get_hv_games_status(self):
         """Returns status of hv-games.service and configured AppIDs."""
         service_file = "/etc/systemd/system/hv-games.service"
@@ -1171,27 +1328,10 @@ class Plugin:
         if not os.path.isfile(log_path):
             log_path = os.path.join(home, ".steam", "steam", "logs", "gameprocess_log.txt")
 
-        appids_str = " ".join(str(a) for a in appids)
-        python_bin = sys.executable
-
-        service_content = f"""[Unit]
-Description=CPUID Fault Emulation Steam game watcher
-After=local-fs.target
-
-[Service]
-Type=simple
-Environment="HV_GAME_APPIDS={appids_str}"
-Environment="HV_STEAM_LOG={log_path}"
-ExecStart={python_bin} {os.path.abspath(__file__)} --hv-games-watch
-Restart=on-failure
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-"""
+        service_content = build_hv_games_service(appids, log_path)
 
         try:
-            service_path = "/etc/systemd/system/hv-games.service"
+            service_path = HV_GAMES_SERVICE
             with open(service_path, "w") as f:
                 f.write(service_content)
 
@@ -1199,7 +1339,7 @@ WantedBy=multi-user.target
             run_cmd(["systemctl", "enable", "hv-games.service"], check=True)
             run_cmd(["systemctl", "restart", "hv-games.service"], check=True)
 
-            return {"success": True, "message": f"HV Games watcher enabled for {len(appids)} shortcut(s)!"}
+            return {"success": True, "message": f"HV Games watcher enabled for {len(appids)} game(s)!"}
         except Exception as e:
             logger.error(f"Configure HV Games failed: {e}")
             return {"success": False, "message": f"Failed to configure HV Games service: {str(e)}"}
@@ -1431,23 +1571,15 @@ if __name__ == "__main__":
                 time.sleep(1)
                 continue
 
-            # Check line for tracked AppID
-            # Pattern: AppID <id> adding PID <pid> as a tracked process
-            # or AppID <id> no longer tracking PID <pid>
-            m_add = re.search(r"AppID\s+([0-9]+)\s+adding\s+PID\s+([0-9]+)", line)
-            m_rem = re.search(r"AppID\s+([0-9]+)\s+no\0-longer\s+tracking\s+PID\s+([0-9]+)", line) or re.search(r"AppID\s+([0-9]+)\s+no\s+longer\s+tracking\s+PID\s+([0-9]+)", line)
-
-            if m_add:
-                game_id = int(m_add.group(1))
-                pid = m_add.group(2)
-                shortcut_appid = str((game_id >> 32) & 0xffffffff)
-                if shortcut_appid in appids_env:
-                    tracked.add(f"{game_id}:{pid}")
-                    reconcile()
-            elif m_rem:
-                game_id = int(m_rem.group(1))
-                pid = m_rem.group(2)
-                key = f"{game_id}:{pid}"
-                if key in tracked:
-                    tracked.remove(key)
-                    reconcile()
+            parsed = parse_game_process_line(line)
+            if not parsed:
+                continue
+            appid, key, adding = parsed
+            if adding and appid in appids_env:
+                logger.info(f"Watched game {appid} started process {key}")
+                tracked.add(key)
+                reconcile()
+            elif not adding and key in tracked:
+                logger.info(f"Watched game {appid} process {key} exited")
+                tracked.remove(key)
+                reconcile()
