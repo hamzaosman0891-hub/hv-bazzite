@@ -242,6 +242,10 @@ const findModuleSources = loggedCallable("find_module_sources");
 const importModuleSource = loggedCallable("import_module_source");
 const getBackendLog = loggedCallable("get_backend_log");
 
+// Must match BACKEND_API in main.py. An older main.py (missing or lower value) means the Python backend
+// wasn't updated or Decky is still running the previous backend process.
+const EXPECTED_BACKEND_API = 7;
+
 const StatusCard = ({ status, onRefresh }) => {
     if (!status) {
         return (SP_JSX.jsx(DFL.PanelSection, { title: "System & Module Status", children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Loading system info...", children: SP_JSX.jsx(FaSync, { className: "animate-spin" }) }) }) }));
@@ -938,6 +942,7 @@ const TABS = [
     { id: "umip", label: "UMIP", icon: SP_JSX.jsx(FaShieldAlt, {}) },
     { id: "logs", label: "Logs", icon: SP_JSX.jsx(FaListAlt, {}) }
 ];
+let warnedBackendApi = undefined;
 // Remembered across panel open/close, since Content remounts each time
 let lastTab = TABS[0].id;
 const Content = () => {
@@ -960,6 +965,11 @@ const Content = () => {
             const res = await getSystemStatus();
             if (res) {
                 setStatus(res);
+                const api = typeof res.backend_api === "number" ? res.backend_api : null;
+                if (api !== EXPECTED_BACKEND_API && warnedBackendApi !== api) {
+                    warnedBackendApi = api;
+                    log("error", `[version] Backend is outdated: backend_api=${api ?? "missing"}, frontend expects ${EXPECTED_BACKEND_API}. Copy the new main.py and restart Decky.`);
+                }
             }
         }
         catch (e) {
@@ -971,7 +981,15 @@ const Content = () => {
         const interval = setInterval(refreshStatus, 8000);
         return () => clearInterval(interval);
     }, []);
-    return (SP_JSX.jsxs("div", { style: { padding: "4px 0" }, children: [SP_JSX.jsx(TabBar, { tabs: TABS, activeTab: activeTab, onSelect: selectTab }), logMsg && (SP_JSX.jsx("div", { style: {
+    return (SP_JSX.jsxs("div", { style: { padding: "4px 0" }, children: [SP_JSX.jsx(TabBar, { tabs: TABS, activeTab: activeTab, onSelect: selectTab }), status && status.backend_api !== EXPECTED_BACKEND_API && (SP_JSX.jsxs("div", { style: {
+                    margin: "0 12px 8px",
+                    padding: "8px 12px",
+                    background: "rgba(127, 29, 29, 0.9)",
+                    borderLeft: "4px solid #f87171",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    color: "#fee2e2"
+                }, children: ["Plugin backend is out of date (version ", status.backend_api ?? "old", ", expected ", EXPECTED_BACKEND_API, "). Copy the new main.py into the plugin folder and restart Decky Loader, or reboot."] })), logMsg && (SP_JSX.jsx("div", { style: {
                     margin: "0 12px 8px",
                     padding: "8px 12px",
                     background: "rgba(30, 41, 59, 0.9)",

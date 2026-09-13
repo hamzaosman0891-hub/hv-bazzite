@@ -92,6 +92,9 @@ def resolve_module_dir():
 MODULE_DIR = resolve_module_dir()
 MODULE_FILE = os.path.join(MODULE_DIR, "cpuid_fault_emulation.ko")
 HV_GAMES_SERVICE = "/etc/systemd/system/hv-games.service"
+# Bump together with EXPECTED_BACKEND_API in src/lib/version.ts whenever the frontend relies on new backend
+# behaviour. Lets the panel detect a stale main.py (not copied, or Decky not restarted after updating).
+BACKEND_API = 7
 
 
 def get_invoking_user():
@@ -1084,7 +1087,12 @@ def refresh_hv_games_service():
 @log_calls
 class Plugin:
     async def _main(self):
-        logger.info(f"Decky HV Control backend started. Module folder: {MODULE_DIR}")
+        try:
+            main_sha = file_sha256(os.path.abspath(__file__))[:12]
+        except Exception:
+            main_sha = "?"
+        logger.info(f"Decky HV Control backend started. backend_api={BACKEND_API} main.py={os.path.abspath(__file__)} "
+                    f"sha256={main_sha} module_folder={MODULE_DIR}")
         try:
             await asyncio.to_thread(migrate_legacy_module_dir)
         except Exception:
@@ -1126,6 +1134,7 @@ class Plugin:
             "status_str": status_str,
             "umip_disabled": umip_disabled,
             "source_exists": source_exists,
+            "backend_api": BACKEND_API,
             "module_file_path": MODULE_FILE,
             "module_dir_path": MODULE_DIR
         }
