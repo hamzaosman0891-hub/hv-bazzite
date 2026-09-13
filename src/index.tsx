@@ -1,3 +1,7 @@
+if (typeof window !== "undefined" && typeof (window as any).process === "undefined") {
+  (window as any).process = { env: { NODE_ENV: "production" } };
+}
+
 import { definePlugin, staticClasses } from "@decky/ui";
 import React, { useState, useEffect } from "react";
 import { FaMicrochip } from "react-icons/fa";
