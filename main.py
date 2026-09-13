@@ -49,6 +49,27 @@ def get_user_home(user=None):
         return f"/home/{user}"
 
 
+def clean_env():
+    env = os.environ.copy()
+    # Decky's bundled Python sets LD_LIBRARY_PATH, which can break system binaries
+    env.pop("LD_LIBRARY_PATH", None)
+    return env
+
+
+def chown_tree(path, user=None):
+    """Gives the desktop user ownership of path and everything below it (rootless Podman needs write access)."""
+    try:
+        info = pwd.getpwnam(user or get_invoking_user())
+    except KeyError:
+        return
+    for root, dirs, files in os.walk(path):
+        for name in [root] + [os.path.join(root, n) for n in dirs + files]:
+            try:
+                os.chown(name, info.pw_uid, info.pw_gid)
+            except Exception:
+                pass
+
+
 def run_cmd(cmd, check=False, user=None, env=None):
     if user and user != "root":
         user_info = pwd.getpwnam(user)
@@ -64,7 +85,7 @@ def run_cmd(cmd, check=False, user=None, env=None):
             except Exception:
                 pass
         
-        full_env = os.environ.copy()
+        full_env = clean_env()
         full_env["HOME"] = invoking_home
         full_env["XDG_RUNTIME_DIR"] = runtime_dir
         if env:
@@ -78,7 +99,7 @@ def run_cmd(cmd, check=False, user=None, env=None):
             exec_cmd.extend(["bash", "-c", cmd])
         res = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=full_env)
     else:
-        full_env = os.environ.copy()
+        full_env = clean_env()
         if env:
             full_env.update(env)
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=isinstance(cmd, str), env=full_env)
@@ -140,11 +161,14 @@ def module_installed():
         return res.returncode == 0
 
 
-def local_module_matches_kernel():
-    if not os.path.isfile(MODULE_FILE):
+def local_module_matches_kernel(module_file=MODULE_FILE):
+    if not os.path.isfile(module_file):
         return False
     kernel = os.uname().release
-    res = run_cmd(["modinfo", "-F", "vermagic", MODULE_FILE])
+    try:
+        res = run_cmd(["modinfo", "-F", "vermagic", module_file])
+    except Exception:
+        return False
     if res.returncode != 0:
         return False
     vermagic = res.stdout.strip()
@@ -456,6 +480,32 @@ def copy_patch_tree(src_root, dest_dir, backup_dir, uid, gid):
     return copied, backed_up
 
 
+def find_module_sources(home, max_depth=3):
+    """Finds cpuid_fault_emulation source folders outside the plugin (e.g. next to hv-install.sh)."""
+    skip = {"steam", "homebrew", "games", "node_modules", "snap", "flatpak"}
+    plugin_module = os.path.realpath(MODULE_DIR)
+    found = []
+    base_depth = home.rstrip("/").count(os.sep)
+    for root, dirs, files in os.walk(home):
+        depth = root.count(os.sep) - base_depth
+        if os.path.basename(root) == "cpuid_fault_emulation" and "dkms.conf" in files:
+            dirs[:] = []
+            if os.path.realpath(root) != plugin_module:
+                ko = os.path.join(root, "cpuid_fault_emulation.ko")
+                has_ko = os.path.isfile(ko)
+                found.append({
+                    "path": root,
+                    "has_ko": has_ko,
+                    "matches_kernel": has_ko and local_module_matches_kernel(ko),
+                })
+            continue
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d.lower() not in skip]
+        if depth >= max_depth:
+            dirs[:] = []
+    # Ready-to-use builds first
+    return sorted(found, key=lambda f: (not f["matches_kernel"], not f["has_ko"], f["path"]))
+
+
 class Plugin:
     async def _main(self):
         logging.info("Decky HV Control backend started.")
@@ -593,14 +643,7 @@ class Plugin:
                 else:
                     zip_ref.extractall(MODULE_DIR)
 
-            # Fix permissions
-            user = get_invoking_user()
-            user_info = pwd.getpwnam(user)
-            for root, dirs, files in os.walk(MODULE_DIR):
-                for d in dirs:
-                    os.chown(os.path.join(root, d), user_info.pw_uid, user_info.pw_gid)
-                for f in files:
-                    os.chown(os.path.join(root, f), user_info.pw_uid, user_info.pw_gid)
+            chown_tree(MODULE_DIR)
 
             # Check for dkms.conf
             dkms_conf = os.path.join(MODULE_DIR, "dkms.conf")
@@ -612,8 +655,42 @@ class Plugin:
             logging.error(f"Extract error: {e}")
             return {"success": False, "message": f"Failed to extract zip: {str(e)}"}
 
+    async def find_module_sources(self):
+        """Lists cpuid_fault_emulation folders prepared outside the plugin, e.g. by hv-install.sh."""
+        home = get_user_home(get_invoking_user())
+        try:
+            return await asyncio.to_thread(find_module_sources, home)
+        except Exception as e:
+            logging.error(f"Module source search failed: {e}")
+            return []
+
+    async def import_module_source(self, source_dir):
+        """Copies an existing cpuid_fault_emulation folder (including any built .ko) into the plugin."""
+        if not source_dir or not os.path.isfile(os.path.join(source_dir, "dkms.conf")):
+            return {"success": False, "message": f"No dkms.conf found in {source_dir}"}
+        if os.path.realpath(source_dir) == os.path.realpath(MODULE_DIR):
+            return {"success": False, "message": "That folder is already the plugin's module folder."}
+        if module_loaded():
+            return {"success": False, "message": "Stop the running module before importing."}
+        try:
+            await asyncio.to_thread(shutil.copytree, source_dir, MODULE_DIR, dirs_exist_ok=True)
+            chown_tree(MODULE_DIR)
+        except Exception as e:
+            logging.error(f"Import failed: {e}")
+            return {"success": False, "message": f"Import failed: {str(e)}"}
+
+        if not os.path.isfile(MODULE_FILE):
+            return {"success": True, "message": f"Imported source from {source_dir}. Now use Build & Install Module."}
+        if uses_local_module() and not local_module_matches_kernel():
+            return {"success": True, "message": f"Imported from {source_dir}, but the .ko was built for a different kernel. Use Rebuild."}
+        return {"success": True, "message": f"Imported ready-to-use module from {source_dir}."}
+
     async def build_and_install_module(self):
         """Builds module using Podman container on Bazzite/SteamOS or DKMS on standard Linux."""
+        # The build takes minutes; keep it off Decky's event loop
+        return await asyncio.to_thread(self._build_and_install_module)
+
+    def _build_and_install_module(self):
         gaming_os = detect_gaming_os()
         user = get_invoking_user()
         home = get_user_home(user)
@@ -633,6 +710,8 @@ class Plugin:
             image_name = repo_name
 
             try:
+                chown_tree(MODULE_DIR, user)
+
                 # Ensure build directory as user
                 run_cmd(["mkdir", "-p", build_container_dir], check=True, user=user)
 
@@ -690,7 +769,7 @@ class Plugin:
                 # Check if already registered
                 status_res = run_cmd(["dkms", "status", "-m", "cpuid_fault_emulation", "-v", "0.1"])
                 if "cpuid_fault_emulation/0.1" not in status_res.stdout:
-                    run_cmd(["dkms", "add", "."], check=True, env={"PWD": MODULE_DIR})
+                    run_cmd(["dkms", "add", MODULE_DIR], check=True)
 
                 run_cmd(["dkms", "build", "cpuid_fault_emulation/0.1", "--force"], check=True)
                 run_cmd(["dkms", "install", "cpuid_fault_emulation/0.1", "--force"], check=True)

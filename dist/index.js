@@ -80,6 +80,8 @@ function FaWrench (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 640 512"},"child":[{"tag":"path","attr":{"d":"M480.07 96H160a160 160 0 1 0 114.24 272h91.52A160 160 0 1 0 480.07 96zM248 268a12 12 0 0 1-12 12h-52v52a12 12 0 0 1-12 12h-24a12 12 0 0 1-12-12v-52H84a12 12 0 0 1-12-12v-24a12 12 0 0 1 12-12h52v-52a12 12 0 0 1 12-12h24a12 12 0 0 1 12 12v52h52a12 12 0 0 1 12 12zm216 76a40 40 0 1 1 40-40 40 40 0 0 1-40 40zm64-96a40 40 0 1 1 40-40 40 40 0 0 1-40 40z"},"child":[]}]})(props);
 }function FaFolderOpen (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 576 512"},"child":[{"tag":"path","attr":{"d":"M572.694 292.093L500.27 416.248A63.997 63.997 0 0 1 444.989 448H45.025c-18.523 0-30.064-20.093-20.731-36.093l72.424-124.155A64 64 0 0 1 152 256h399.964c18.523 0 30.064 20.093 20.73 36.093zM152 224h328v-48c0-26.51-21.49-48-48-48H272l-64-64H48C21.49 64 0 85.49 0 112v278.046l69.077-118.418C86.214 242.25 117.989 224 152 224z"},"child":[]}]})(props);
+}function FaFileImport (props) {
+  return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M16 288c-8.8 0-16 7.2-16 16v32c0 8.8 7.2 16 16 16h112v-64zm489-183L407.1 7c-4.5-4.5-10.6-7-17-7H384v128h128v-6.1c0-6.3-2.5-12.4-7-16.9zm-153 31V0H152c-13.3 0-24 10.7-24 24v264h128v-65.2c0-14.3 17.3-21.4 27.4-11.3L379 308c6.6 6.7 6.6 17.4 0 24l-95.7 96.4c-10.1 10.1-27.4 3-27.4-11.3V352H128v136c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H376c-13.2 0-24-10.8-24-24z"},"child":[]}]})(props);
 }function FaFileArchive (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 384 512"},"child":[{"tag":"path","attr":{"d":"M377 105L279.1 7c-4.5-4.5-10.6-7-17-7H256v128h128v-6.1c0-6.3-2.5-12.4-7-16.9zM128.4 336c-17.9 0-32.4 12.1-32.4 27 0 15 14.6 27 32.5 27s32.4-12.1 32.4-27-14.6-27-32.5-27zM224 136V0h-63.6v32h-32V0H24C10.7 0 0 10.7 0 24v464c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H248c-13.2 0-24-10.8-24-24zM95.9 32h32v32h-32zm32.3 384c-33.2 0-58-30.4-51.4-62.9L96.4 256v-32h32v-32h-32v-32h32v-32h-32V96h32V64h32v32h-32v32h32v32h-32v32h32v32h-32v32h22.1c5.7 0 10.7 4.1 11.8 9.7l17.3 87.7c6.4 32.4-18.4 62.6-51.4 62.6z"},"child":[]}]})(props);
 }function FaExclamationTriangle (props) {
@@ -126,6 +128,8 @@ const getPatchableGames = callable("get_patchable_games");
 const findGameShippingExe = callable("find_game_shipping_exe");
 const scanForPatches = callable("scan_for_patches");
 const applyHvPatch = callable("apply_hv_patch");
+const findModuleSources = callable("find_module_sources");
+const importModuleSource = callable("import_module_source");
 
 const StatusCard = ({ status, onRefresh }) => {
     if (!status) {
@@ -208,6 +212,52 @@ const ZipSelector = ({ sourceExists, onRefresh, onLogMsg }) => {
                         data: z.path,
                         label: `${z.name} (${(z.size / 1024 / 1024).toFixed(1)} MB)`
                     })), selectedOption: selectedPath, onChange: (opt) => setSelectedPath(opt.data) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Zip Archive Path", value: selectedPath, onChange: (e) => setSelectedPath(e.target.value) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", gap: "8px", width: "100%" }, children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: handleOpenDolphin, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFolderOpen, {}), " Open Location in Dolphin"] }) }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading || !selectedPath, onClick: handleExtractZip, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileArchive, {}), " Extract & Prepare Zip"] }) }) })] }));
+};
+
+const describe = (s) => s.matches_kernel ? "built, ready" : s.has_ko ? "built, old kernel" : "source only";
+const ModuleImport = ({ onRefresh, onLogMsg }) => {
+    const [sources, setSources] = SP_REACT.useState([]);
+    const [selected, setSelected] = SP_REACT.useState("");
+    const [scanning, setScanning] = SP_REACT.useState(false);
+    const [importing, setImporting] = SP_REACT.useState(false);
+    const scan = async () => {
+        setScanning(true);
+        try {
+            const res = await findModuleSources();
+            if (Array.isArray(res)) {
+                setSources(res);
+                setSelected(res.length > 0 ? res[0].path : "");
+            }
+        }
+        catch (e) {
+            console.error("Failed to find module folders:", e);
+        }
+        finally {
+            setScanning(false);
+        }
+    };
+    SP_REACT.useEffect(() => {
+        scan();
+    }, []);
+    const handleImport = async () => {
+        setImporting(true);
+        onLogMsg(`Importing module from ${selected}...`);
+        try {
+            const res = await importModuleSource(selected);
+            onLogMsg(res.message);
+            if (res.success)
+                onRefresh();
+        }
+        catch (e) {
+            onLogMsg(`Import error: ${e.message || e}`);
+        }
+        finally {
+            setImporting(false);
+        }
+    };
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "Import Existing Module (hv-install.sh)", children: [sources.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "12px", color: "#9ca3af" }, children: scanning
+                        ? "Searching your home folder..."
+                        : "No cpuid_fault_emulation folder found in your home folder. Extract the zip below instead." }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Found Module Folders", rgOptions: sources.map((s) => ({ data: s.path, label: `${s.path} (${describe(s)})` })), selectedOption: selected, onChange: (opt) => setSelected(opt.data) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: importing || !selected, onClick: handleImport, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileImport, {}), " ", importing ? "Importing..." : "Import Into Plugin"] }) }) })] })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: scanning, onClick: scan, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaSearch, {}), " Search Again"] }) }) })] }));
 };
 
 const ModuleActions = ({ status, onRefresh, onLogMsg }) => {
@@ -531,7 +581,9 @@ const Content = () => {
                     fontSize: "12px",
                     color: "#e2e8f0",
                     wordBreak: "break-word"
-                }, children: logMsg })), activeTab === "module" && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(StatusCard, { status: status, onRefresh: refreshStatus }), SP_JSX.jsx(ModuleActions, { status: status, onRefresh: refreshStatus, onLogMsg: setLogMsg })] })), activeTab === "source" && (SP_JSX.jsx(ZipSelector, { sourceExists: status?.source_exists || false, onRefresh: refreshStatus, onLogMsg: setLogMsg })), activeTab === "games" && SP_JSX.jsx(HvGamesCard, { onLogMsg: setLogMsg }), activeTab === "patch" && SP_JSX.jsx(PatchCard, { onLogMsg: setLogMsg }), activeTab === "umip" && (SP_JSX.jsx(UmipCard, { umipDisabled: status?.umip_disabled || false, onRefresh: refreshStatus, onLogMsg: setLogMsg }))] }));
+                }, children: logMsg })), activeTab === "module" && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(StatusCard, { status: status, onRefresh: refreshStatus }), status?.status_str === "NOT_INSTALLED" && (SP_JSX.jsx("div", { style: { margin: "0 12px 8px", fontSize: "12px", color: "#facc15" }, children: status?.source_exists
+                            ? "Source is ready. Use Build & Install Module below."
+                            : "No module in the plugin yet. Open the Source tab to import one built with hv-install.sh, or extract the cpuid_fault_emulation zip." })), SP_JSX.jsx(ModuleActions, { status: status, onRefresh: refreshStatus, onLogMsg: setLogMsg })] })), activeTab === "source" && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(ModuleImport, { onRefresh: refreshStatus, onLogMsg: setLogMsg }), SP_JSX.jsx(ZipSelector, { sourceExists: status?.source_exists || false, onRefresh: refreshStatus, onLogMsg: setLogMsg })] })), activeTab === "games" && SP_JSX.jsx(HvGamesCard, { onLogMsg: setLogMsg }), activeTab === "patch" && SP_JSX.jsx(PatchCard, { onLogMsg: setLogMsg }), activeTab === "umip" && (SP_JSX.jsx(UmipCard, { umipDisabled: status?.umip_disabled || false, onRefresh: refreshStatus, onLogMsg: setLogMsg }))] }));
 };
 var index = DFL.definePlugin(() => {
     return {

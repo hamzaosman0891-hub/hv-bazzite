@@ -17,3 +17,5 @@ export const getPatchableGames = callable<[], any>("get_patchable_games");
 export const findGameShippingExe = callable<[install_dir: string, exe_hint: string], any>("find_game_shipping_exe");
 export const scanForPatches = callable<[], any>("scan_for_patches");
 export const applyHvPatch = callable<[exe_path: string, archive_path: string], any>("apply_hv_patch");
+export const findModuleSources = callable<[], any>("find_module_sources");
+export const importModuleSource = callable<[source_dir: string], any>("import_module_source");

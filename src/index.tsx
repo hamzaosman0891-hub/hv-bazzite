@@ -5,6 +5,7 @@ import { getSystemStatus } from "./lib/api";
 
 import { StatusCard } from "./components/StatusCard";
 import { ZipSelector } from "./components/ZipSelector";
+import { ModuleImport } from "./components/ModuleImport";
 import { ModuleActions } from "./components/ModuleActions";
 import { HvGamesCard } from "./components/HvGamesCard";
 import { UmipCard } from "./components/UmipCard";
@@ -71,6 +72,13 @@ const Content: React.FC = () => {
       {activeTab === "module" && (
         <>
           <StatusCard status={status} onRefresh={refreshStatus} />
+          {status?.status_str === "NOT_INSTALLED" && (
+            <div style={{ margin: "0 12px 8px", fontSize: "12px", color: "#facc15" }}>
+              {status?.source_exists
+                ? "Source is ready. Use Build & Install Module below."
+                : "No module in the plugin yet. Open the Source tab to import one built with hv-install.sh, or extract the cpuid_fault_emulation zip."}
+            </div>
+          )}
           <ModuleActions
             status={status}
             onRefresh={refreshStatus}
@@ -80,11 +88,14 @@ const Content: React.FC = () => {
       )}
 
       {activeTab === "source" && (
-        <ZipSelector
-          sourceExists={status?.source_exists || false}
-          onRefresh={refreshStatus}
-          onLogMsg={setLogMsg}
-        />
+        <>
+          <ModuleImport onRefresh={refreshStatus} onLogMsg={setLogMsg} />
+          <ZipSelector
+            sourceExists={status?.source_exists || false}
+            onRefresh={refreshStatus}
+            onLogMsg={setLogMsg}
+          />
+        </>
       )}
 
       {activeTab === "games" && <HvGamesCard onLogMsg={setLogMsg} />}
