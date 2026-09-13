@@ -703,6 +703,140 @@ def find_module_sources(home, max_depth=3):
     return sorted(found, key=lambda f: (not f["matches_kernel"], not f["has_ko"], f["path"]))
 
 
+# Kernel modules are loaded from a root-owned copy outside the home folder. On SELinux systems like
+# Bazzite, a .ko with a home-folder label can be refused ("Permission denied") even for root when the
+# request comes from a service such as Decky; system modules are labelled modules_object_t.
+STAGED_MODULE_DIR = "/var/lib/decky-hv-control"
+STAGED_MODULE_FILE = os.path.join(STAGED_MODULE_DIR, "cpuid_fault_emulation.ko")
+
+KEY_REJECTED_HINT = ("The kernel rejected the module's signing key. This is commonly caused by Secure Boot / "
+                     "Kernel Lockdown mode: disable Secure Boot or sign the module and enroll the key.")
+NO_SUCH_DEVICE_HINT = ("No such device. Virtualisation may be turned off in the BIOS, or kvm/kvm_amd could not "
+                       "be removed before loading cpuid_fault_emulation.")
+PERMISSION_HINT = ("The kernel refused to load the module (permission denied). This is usually SELinux or "
+                   "Secure Boot lockdown; see the diagnostics in the Logs tab (Load Backend Log).")
+
+
+def selinux_enabled():
+    return os.path.exists("/sys/fs/selinux/enforce")
+
+
+def stage_module_file():
+    """Copies the compiled module to a root-owned system folder and gives it the kernel module label."""
+    os.makedirs(STAGED_MODULE_DIR, mode=0o755, exist_ok=True)
+    os.chmod(STAGED_MODULE_DIR, 0o755)
+    tmp = STAGED_MODULE_FILE + ".tmp"
+    shutil.copyfile(MODULE_FILE, tmp)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, STAGED_MODULE_FILE)
+    if selinux_enabled() and command_exists("chcon"):
+        res = run_cmd(["chcon", "-t", "modules_object_t", STAGED_MODULE_FILE])
+        if res.returncode != 0:
+            logger.warning(f"chcon modules_object_t failed: {(res.stderr or res.stdout).strip()}")
+    return STAGED_MODULE_FILE
+
+
+def collect_module_load_diagnostics(paths):
+    """Logs everything useful for working out why the kernel refused the module."""
+    def out(cmd):
+        if not command_exists(cmd[0]):
+            return f"{cmd[0]}: not available"
+        res = run_cmd(cmd)
+        return ((res.stdout or "") + (res.stderr or "")).strip() or f"(exit {res.returncode}, no output)"
+
+    lines = [f"process: uid={os.getuid()} euid={os.geteuid()} context={out(['id', '-Z'])}"]
+    try:
+        with open("/proc/self/status") as f:
+            lines += [l.strip() for l in f if l.startswith(("CapEff", "CapBnd"))]
+    except Exception:
+        pass
+    lines.append(f"getenforce: {out(['getenforce'])}")
+    for path in paths:
+        lines.append(f"file: {out(['ls', '-lZ', path])}")
+    try:
+        with open("/sys/kernel/security/lockdown") as f:
+            lines.append(f"lockdown: {f.read().strip()}")
+    except Exception as e:
+        lines.append(f"lockdown: unreadable ({e})")
+    lines.append(f"secure boot: {out(['mokutil', '--sb-state'])}")
+    try:
+        with open("/proc/sys/kernel/modules_disabled") as f:
+            lines.append(f"modules_disabled: {f.read().strip()}")
+    except Exception:
+        pass
+    dmesg = out(["dmesg"]).splitlines()
+    lines.append("dmesg (module/avc/lockdown):")
+    lines += ["  " + l for l in dmesg if re.search(r"cpuid_fault|module|avc|lockdown|denied", l, re.I)][-15:]
+    if command_exists("ausearch"):
+        lines.append("ausearch avc:")
+        lines += ["  " + l for l in out(["ausearch", "-m", "AVC,USER_AVC", "-ts", "recent"]).splitlines()[-15:]]
+    for line in lines:
+        logger.warning(f"[module diagnostics] {line}")
+
+
+def load_module():
+    """Loads cpuid_fault_emulation the same way hv-install.sh does. Returns (success, message)."""
+    for mod in ("kvm_amd", "kvm"):
+        res = run_cmd(["modprobe", "-r", mod])
+        if res.returncode != 0:
+            logger.warning(f"modprobe -r {mod} failed: {(res.stderr or res.stdout).strip()}")
+
+    if not uses_local_module():
+        res = run_cmd(["modprobe", "cpuid_fault_emulation"])
+        attempts = [("modprobe", res)]
+    else:
+        candidates = []
+        try:
+            candidates.append(stage_module_file())
+        except Exception as e:
+            logger.warning(f"Could not stage module into {STAGED_MODULE_DIR}: {e}")
+        candidates.append(MODULE_FILE)
+        attempts = []
+        for path in candidates:
+            res = run_cmd(["insmod", path], env={"LC_ALL": "C"})
+            attempts.append((path, res))
+            if res.returncode == 0 or module_loaded():
+                break
+            logger.warning(f"insmod {path} failed: {(res.stderr or res.stdout).strip()}")
+
+    if module_loaded():
+        logger.info(f"cpuid_fault_emulation loaded from {attempts[-1][0]}")
+        return True, "cpuid_fault_emulation started successfully!"
+
+    # Put KVM back so normal virtualisation keeps working
+    run_cmd(["modprobe", "kvm"])
+    run_cmd(["modprobe", "kvm_amd"])
+
+    output = " | ".join((res.stderr or res.stdout).strip() for _, res in attempts if (res.stderr or res.stdout).strip())
+    if "Key was rejected by service" in output:
+        return False, f"Failed to load module: {output}. {KEY_REJECTED_HINT}"
+    if "No such device" in output:
+        return False, f"Failed to load module: {output}. {NO_SUCH_DEVICE_HINT}"
+    if "Permission denied" in output or "Operation not permitted" in output:
+        collect_module_load_diagnostics([path for path, _ in attempts if path != "modprobe"])
+        return False, f"Failed to load module: {output}. {PERMISSION_HINT}"
+    return False, f"Failed to load module: {output or 'unknown error'}"
+
+
+def unload_module():
+    """Unloads cpuid_fault_emulation and restores KVM. Returns (success, message)."""
+    cmd = ["rmmod", "cpuid_fault_emulation"] if uses_local_module() else ["modprobe", "-r", "cpuid_fault_emulation"]
+    res = run_cmd(cmd)
+    if module_loaded():
+        return False, f"Failed to unload module: {(res.stderr or res.stdout).strip() or 'still loaded'}"
+    run_cmd(["modprobe", "kvm_amd"])
+    run_cmd(["modprobe", "kvm"])
+    return True, "cpuid_fault_emulation stopped successfully!"
+
+
+def system_python():
+    """Python for the watcher service. sys.executable inside Decky is its PluginLoader binary, not Python."""
+    for candidate in ("/usr/bin/python3", shutil.which("python3", path="/usr/local/bin:/usr/bin:/bin")):
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
 def migrate_legacy_module_dir():
     """Moves a module folder from the plugin folder into the persistent settings folder."""
     if os.path.realpath(MODULE_DIR) == os.path.realpath(LEGACY_MODULE_DIR) or not os.path.isdir(LEGACY_MODULE_DIR):
@@ -769,7 +903,7 @@ Type=simple
 Environment="HV_GAME_APPIDS={appids_str}"
 Environment="HV_STEAM_LOG={log_path}"
 Environment="HV_MODULE_DIR={MODULE_DIR}"
-ExecStart={sys.executable} {os.path.abspath(__file__)} --hv-games-watch
+ExecStart={system_python()} {os.path.abspath(__file__)} --hv-games-watch
 Restart=on-failure
 RestartSec=3
 
@@ -797,7 +931,7 @@ def refresh_hv_games_service():
         return
     env = read_hv_games_service_env()
     appids = env.get("HV_GAME_APPIDS", "").split()
-    if not appids or not env.get("HV_STEAM_LOG"):
+    if not appids or not env.get("HV_STEAM_LOG") or not system_python():
         return
     wanted = build_hv_games_service(appids, env["HV_STEAM_LOG"])
     with open(HV_GAMES_SERVICE, "r") as f:
@@ -1116,30 +1250,10 @@ class Plugin:
             return {"success": False, "message": f"Compiled module does not match running kernel {os.uname().release}. Rebuild required."}
 
         try:
-            # Unload kvm_amd & kvm
-            run_cmd(["modprobe", "-r", "kvm_amd"])
-            run_cmd(["modprobe", "-r", "kvm"])
-
-            if uses_local_module():
-                res = run_cmd(["insmod", MODULE_FILE])
-            else:
-                res = run_cmd(["modprobe", "cpuid_fault_emulation"])
-
-            if res.returncode != 0:
-                out = res.stderr.strip() or res.stdout.strip()
-                if "Key was rejected by service" in out:
-                    return {"success": False, "message": "Key rejected by kernel. Secure Boot / Lockdown mode may be active."}
-                elif "No such device" in out:
-                    return {"success": False, "message": "No such device error. Ensure CPU Virtualization (AMD-V/VT-x) is enabled in BIOS."}
-                return {"success": False, "message": f"Failed to load module: {out}"}
-
-            if module_loaded():
-                return {"success": True, "message": "cpuid_fault_emulation started successfully!"}
-            else:
-                return {"success": False, "message": "Module insmod succeeded but is not listed in /proc/modules."}
-
+            success, message = await asyncio.to_thread(load_module)
+            return {"success": success, "message": message}
         except Exception as e:
-            logger.error(f"Start module failed: {e}")
+            logger.exception("Start module failed")
             return {"success": False, "message": f"Start failed: {str(e)}"}
 
     async def stop_module(self):
@@ -1148,25 +1262,10 @@ class Plugin:
             return {"success": True, "message": "cpuid_fault_emulation is already stopped."}
 
         try:
-            if uses_local_module():
-                res = run_cmd(["rmmod", "cpuid_fault_emulation"])
-            else:
-                res = run_cmd(["modprobe", "-r", "cpuid_fault_emulation"])
-
-            if res.returncode != 0:
-                return {"success": False, "message": f"Failed to unload module: {res.stderr.strip()}"}
-
-            # Reload KVM modules
-            run_cmd(["modprobe", "kvm_amd"])
-            run_cmd(["modprobe", "kvm"])
-
-            if not module_loaded():
-                return {"success": True, "message": "cpuid_fault_emulation stopped successfully!"}
-            else:
-                return {"success": False, "message": "Module rmmod executed but module is still loaded."}
-
+            success, message = await asyncio.to_thread(unload_module)
+            return {"success": success, "message": message}
         except Exception as e:
-            logger.error(f"Stop module failed: {e}")
+            logger.exception("Stop module failed")
             return {"success": False, "message": f"Stop failed: {str(e)}"}
 
     async def disable_umip(self):
@@ -1230,6 +1329,8 @@ class Plugin:
             if uses_local_module():
                 if os.path.isfile(MODULE_FILE):
                     os.remove(MODULE_FILE)
+                if os.path.isfile(STAGED_MODULE_FILE):
+                    os.remove(STAGED_MODULE_FILE)
                 return {"success": True, "message": "Compiled cpuid_fault_emulation.ko removed."}
             else:
                 if command_exists("dkms"):
@@ -1328,6 +1429,8 @@ class Plugin:
         if not os.path.isfile(log_path):
             log_path = os.path.join(home, ".steam", "steam", "logs", "gameprocess_log.txt")
 
+        if not system_python():
+            return {"success": False, "message": "python3 was not found in /usr/bin, so the watcher service can't run."}
         service_content = build_hv_games_service(appids, log_path)
 
         try:
@@ -1536,25 +1639,16 @@ if __name__ == "__main__":
             global owns_module
             if len(tracked) > 0:
                 if not module_loaded():
-                    # Synchronously start
-                    res = subprocess.run(["modprobe", "-r", "kvm_amd"])
-                    subprocess.run(["modprobe", "-r", "kvm"])
-                    if os.path.isfile(MODULE_FILE):
-                        res = subprocess.run(["insmod", MODULE_FILE])
-                    else:
-                        res = subprocess.run(["modprobe", "cpuid_fault_emulation"])
-                    if res.returncode == 0:
+                    success, message = load_module()
+                    logger.info(f"Watcher start: {message}")
+                    if success:
                         owns_module = True
                         with open("/run/hv-games-owns-module", "w") as f:
                             f.write("1")
             elif owns_module:
                 if module_loaded():
-                    if os.path.isfile(MODULE_FILE):
-                        subprocess.run(["rmmod", "cpuid_fault_emulation"])
-                    else:
-                        subprocess.run(["modprobe", "-r", "cpuid_fault_emulation"])
-                    subprocess.run(["modprobe", "kvm_amd"])
-                    subprocess.run(["modprobe", "kvm"])
+                    success, message = unload_module()
+                    logger.info(f"Watcher stop: {message}")
                 owns_module = False
                 if os.path.exists("/run/hv-games-owns-module"):
                     os.remove("/run/hv-games-owns-module")
