@@ -20,7 +20,7 @@ const toast = (body: string) => {
 
 // Wraps a backend call with logging of arguments, result, errors, duration and slow calls
 function loggedCallable<Args extends any[] = [], Return = any>(route: string) {
-  const call = loggedCallable<Args, Return>(route);
+  const call = callable<Args, Return>(route);
   return async (...args: Args): Promise<Return> => {
     const quiet = QUIET_ROUTES.has(route);
     const start = Date.now();

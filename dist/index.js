@@ -115,6 +115,7 @@ catch {
 if (api._version != API_VERSION) {
     console.warn(`[@decky/api] Requested API version ${API_VERSION} but the running loader only supports version ${api._version}. Some features may not work.`);
 }
+const callable = api.callable;
 const toaster = api.toaster;
 
 const MAX_ENTRIES = 300;
@@ -175,7 +176,7 @@ const toast = (body) => {
 };
 // Wraps a backend call with logging of arguments, result, errors, duration and slow calls
 function loggedCallable(route) {
-    const call = loggedCallable(route);
+    const call = callable(route);
     return async (...args) => {
         const quiet = QUIET_ROUTES.has(route);
         const start = Date.now();
