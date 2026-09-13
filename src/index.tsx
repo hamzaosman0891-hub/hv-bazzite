@@ -1,14 +1,6 @@
-if (typeof window !== "undefined" && typeof (window as any).process === "undefined") {
-  (window as any).process = { env: { NODE_ENV: "production" } };
-}
-
-import { definePlugin, staticClasses } from "@decky/ui";
+import { definePlugin, ServerAPI, staticClasses } from "decky-frontend-lib";
 import React, { useState, useEffect } from "react";
 import { FaMicrochip } from "react-icons/fa";
-
-export interface ServerAPI {
-  callPluginMethod(method: string, args: Record<string, any>): Promise<{ result: any }>;
-}
 
 import { StatusCard } from "./components/StatusCard";
 import { ZipSelector } from "./components/ZipSelector";

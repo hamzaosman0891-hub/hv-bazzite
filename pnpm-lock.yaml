@@ -42,6 +42,9 @@ importers:
       '@types/react':
         specifier: ^18.2.66
         version: 18.3.31
+      decky-frontend-lib:
+        specifier: ^3.25.0
+        version: 3.25.0
       rollup:
         specifier: ^3.29.4
         version: 3.30.0
@@ -144,6 +147,9 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  decky-frontend-lib@3.25.0:
+    resolution: {integrity: sha512-2lBoHS2AIRmuluq/bGdHBz+uyToQE7k3K/vDq1MQbDZ4eC+8CGDuh2T8yZOj3D0yjGP2MdikNNAWPA9Z5l2qDg==}
 
   deepmerge@4.3.1:
     resolution: {integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==}
@@ -338,6 +344,8 @@ snapshots:
   commondir@1.0.1: {}
 
   csstype@3.2.3: {}
+
+  decky-frontend-lib@3.25.0: {}
 
   deepmerge@4.3.1: {}
 

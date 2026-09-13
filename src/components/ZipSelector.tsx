@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem, TextField, DropdownItem, Field } from "@decky/ui";
-import { FaFolderOpen, FaFileArchive, FaDownload } from "react-icons/fa";
+import { PanelSection, PanelSectionRow, ButtonItem, TextField, DropdownItem, Field } from "decky-frontend-lib";
+import { FaFolderOpen, FaFileArchive } from "react-icons/fa";
 
 interface ZipItem {
   name: string;

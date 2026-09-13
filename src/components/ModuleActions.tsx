@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem, ConfirmModal, showModal } from "@decky/ui";
-import { FaPlay, FaStop, FaTools, FaTrash, FaSync } from "react-icons/fa";
+import { PanelSection, PanelSectionRow, ButtonItem, ConfirmModal, showModal } from "decky-frontend-lib";
+import { FaPlay, FaStop, FaTools, FaTrash } from "react-icons/fa";
 
 interface ModuleActionsProps {
   serverAPI: any;

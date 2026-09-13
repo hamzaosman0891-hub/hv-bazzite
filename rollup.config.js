@@ -24,5 +24,5 @@ export default {
     typescript({ tsconfig: './tsconfig.json' }),
     json()
   ],
-  external: []
+  external: ['react', 'react-dom', 'decky-frontend-lib']
 };

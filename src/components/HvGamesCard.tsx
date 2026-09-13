@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { PanelSection, PanelSectionRow, ToggleField, ButtonItem, Field } from "@decky/ui";
-import { FaGamepad, FaSync, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
+import { PanelSection, PanelSectionRow, ToggleField, ButtonItem, Field } from "decky-frontend-lib";
+import { FaGamepad, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 
 interface ShortcutItem {
   appid: string;

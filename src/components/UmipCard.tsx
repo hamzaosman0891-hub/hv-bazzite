@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem, Field } from "@decky/ui";
+import { PanelSection, PanelSectionRow, ButtonItem, Field } from "decky-frontend-lib";
 import { FaShieldAlt, FaExclamationTriangle, FaCheck } from "react-icons/fa";
 
 interface UmipProps {

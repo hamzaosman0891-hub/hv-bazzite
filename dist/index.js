@@ -1,48 +1,9 @@
-function getDefaultExportFromCjs (x) {
-	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
-}
+import React, { useState, useEffect } from 'react';
+import { PanelSection, PanelSectionRow, Field, DropdownItem, TextField, ButtonItem, showModal, ConfirmModal, ToggleField, definePlugin, staticClasses } from 'decky-frontend-lib';
 
 var jsxRuntime = {exports: {}};
 
 var reactJsxRuntime_production_min = {};
-
-var react = {exports: {}};
-
-var react_production_min = {};
-
-/**
- * @license React
- * react.production.min.js
- *
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-var l$1=Symbol.for("react.element"),n$1=Symbol.for("react.portal"),p$1=Symbol.for("react.fragment"),q$1=Symbol.for("react.strict_mode"),r=Symbol.for("react.profiler"),t=Symbol.for("react.provider"),u=Symbol.for("react.context"),v=Symbol.for("react.forward_ref"),w=Symbol.for("react.suspense"),x=Symbol.for("react.memo"),y=Symbol.for("react.lazy"),z=Symbol.iterator;function A(a){if(null===a||"object"!==typeof a)return null;a=z&&a[z]||a["@@iterator"];return "function"===typeof a?a:null}
-var B={isMounted:function(){return !1},enqueueForceUpdate:function(){},enqueueReplaceState:function(){},enqueueSetState:function(){}},C=Object.assign,D={};function E(a,b,e){this.props=a;this.context=b;this.refs=D;this.updater=e||B;}E.prototype.isReactComponent={};
-E.prototype.setState=function(a,b){if("object"!==typeof a&&"function"!==typeof a&&null!=a)throw Error("setState(...): takes an object of state variables to update or a function which returns an object of state variables.");this.updater.enqueueSetState(this,a,b,"setState");};E.prototype.forceUpdate=function(a){this.updater.enqueueForceUpdate(this,a,"forceUpdate");};function F(){}F.prototype=E.prototype;function G(a,b,e){this.props=a;this.context=b;this.refs=D;this.updater=e||B;}var H=G.prototype=new F;
-H.constructor=G;C(H,E.prototype);H.isPureReactComponent=!0;var I=Array.isArray,J=Object.prototype.hasOwnProperty,K={current:null},L={key:!0,ref:!0,__self:!0,__source:!0};
-function M(a,b,e){var d,c={},k=null,h=null;if(null!=b)for(d in void 0!==b.ref&&(h=b.ref),void 0!==b.key&&(k=""+b.key),b)J.call(b,d)&&!L.hasOwnProperty(d)&&(c[d]=b[d]);var g=arguments.length-2;if(1===g)c.children=e;else if(1<g){for(var f=Array(g),m=0;m<g;m++)f[m]=arguments[m+2];c.children=f;}if(a&&a.defaultProps)for(d in g=a.defaultProps,g)void 0===c[d]&&(c[d]=g[d]);return {$$typeof:l$1,type:a,key:k,ref:h,props:c,_owner:K.current}}
-function N(a,b){return {$$typeof:l$1,type:a.type,key:b,ref:a.ref,props:a.props,_owner:a._owner}}function O(a){return "object"===typeof a&&null!==a&&a.$$typeof===l$1}function escape(a){var b={"=":"=0",":":"=2"};return "$"+a.replace(/[=:]/g,function(a){return b[a]})}var P=/\/+/g;function Q(a,b){return "object"===typeof a&&null!==a&&null!=a.key?escape(""+a.key):b.toString(36)}
-function R(a,b,e,d,c){var k=typeof a;if("undefined"===k||"boolean"===k)a=null;var h=!1;if(null===a)h=!0;else switch(k){case "string":case "number":h=!0;break;case "object":switch(a.$$typeof){case l$1:case n$1:h=!0;}}if(h)return h=a,c=c(h),a=""===d?"."+Q(h,0):d,I(c)?(e="",null!=a&&(e=a.replace(P,"$&/")+"/"),R(c,b,e,"",function(a){return a})):null!=c&&(O(c)&&(c=N(c,e+(!c.key||h&&h.key===c.key?"":(""+c.key).replace(P,"$&/")+"/")+a)),b.push(c)),1;h=0;d=""===d?".":d+":";if(I(a))for(var g=0;g<a.length;g++){k=
-a[g];var f=d+Q(k,g);h+=R(k,b,e,f,c);}else if(f=A(a),"function"===typeof f)for(a=f.call(a),g=0;!(k=a.next()).done;)k=k.value,f=d+Q(k,g++),h+=R(k,b,e,f,c);else if("object"===k)throw b=String(a),Error("Objects are not valid as a React child (found: "+("[object Object]"===b?"object with keys {"+Object.keys(a).join(", ")+"}":b)+"). If you meant to render a collection of children, use an array instead.");return h}
-function S(a,b,e){if(null==a)return a;var d=[],c=0;R(a,d,"","",function(a){return b.call(e,a,c++)});return d}function T(a){if(-1===a._status){var b=a._result;b=b();b.then(function(b){if(0===a._status||-1===a._status)a._status=1,a._result=b;},function(b){if(0===a._status||-1===a._status)a._status=2,a._result=b;});-1===a._status&&(a._status=0,a._result=b);}if(1===a._status)return a._result.default;throw a._result;}
-var U={current:null},V={transition:null},W={ReactCurrentDispatcher:U,ReactCurrentBatchConfig:V,ReactCurrentOwner:K};function X(){throw Error("act(...) is not supported in production builds of React.");}
-react_production_min.Children={map:S,forEach:function(a,b,e){S(a,function(){b.apply(this,arguments);},e);},count:function(a){var b=0;S(a,function(){b++;});return b},toArray:function(a){return S(a,function(a){return a})||[]},only:function(a){if(!O(a))throw Error("React.Children.only expected to receive a single React element child.");return a}};react_production_min.Component=E;react_production_min.Fragment=p$1;react_production_min.Profiler=r;react_production_min.PureComponent=G;react_production_min.StrictMode=q$1;react_production_min.Suspense=w;
-react_production_min.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED=W;react_production_min.act=X;
-react_production_min.cloneElement=function(a,b,e){if(null===a||void 0===a)throw Error("React.cloneElement(...): The argument must be a React element, but you passed "+a+".");var d=C({},a.props),c=a.key,k=a.ref,h=a._owner;if(null!=b){void 0!==b.ref&&(k=b.ref,h=K.current);void 0!==b.key&&(c=""+b.key);if(a.type&&a.type.defaultProps)var g=a.type.defaultProps;for(f in b)J.call(b,f)&&!L.hasOwnProperty(f)&&(d[f]=void 0===b[f]&&void 0!==g?g[f]:b[f]);}var f=arguments.length-2;if(1===f)d.children=e;else if(1<f){g=Array(f);
-for(var m=0;m<f;m++)g[m]=arguments[m+2];d.children=g;}return {$$typeof:l$1,type:a.type,key:c,ref:k,props:d,_owner:h}};react_production_min.createContext=function(a){a={$$typeof:u,_currentValue:a,_currentValue2:a,_threadCount:0,Provider:null,Consumer:null,_defaultValue:null,_globalName:null};a.Provider={$$typeof:t,_context:a};return a.Consumer=a};react_production_min.createElement=M;react_production_min.createFactory=function(a){var b=M.bind(null,a);b.type=a;return b};react_production_min.createRef=function(){return {current:null}};
-react_production_min.forwardRef=function(a){return {$$typeof:v,render:a}};react_production_min.isValidElement=O;react_production_min.lazy=function(a){return {$$typeof:y,_payload:{_status:-1,_result:a},_init:T}};react_production_min.memo=function(a,b){return {$$typeof:x,type:a,compare:void 0===b?null:b}};react_production_min.startTransition=function(a){var b=V.transition;V.transition={};try{a();}finally{V.transition=b;}};react_production_min.unstable_act=X;react_production_min.useCallback=function(a,b){return U.current.useCallback(a,b)};react_production_min.useContext=function(a){return U.current.useContext(a)};
-react_production_min.useDebugValue=function(){};react_production_min.useDeferredValue=function(a){return U.current.useDeferredValue(a)};react_production_min.useEffect=function(a,b){return U.current.useEffect(a,b)};react_production_min.useId=function(){return U.current.useId()};react_production_min.useImperativeHandle=function(a,b,e){return U.current.useImperativeHandle(a,b,e)};react_production_min.useInsertionEffect=function(a,b){return U.current.useInsertionEffect(a,b)};react_production_min.useLayoutEffect=function(a,b){return U.current.useLayoutEffect(a,b)};
-react_production_min.useMemo=function(a,b){return U.current.useMemo(a,b)};react_production_min.useReducer=function(a,b,e){return U.current.useReducer(a,b,e)};react_production_min.useRef=function(a){return U.current.useRef(a)};react_production_min.useState=function(a){return U.current.useState(a)};react_production_min.useSyncExternalStore=function(a,b,e){return U.current.useSyncExternalStore(a,b,e)};react_production_min.useTransition=function(){return U.current.useTransition()};react_production_min.version="18.3.1";
-
-{
-  react.exports = react_production_min;
-}
-
-var reactExports = react.exports;
-var React = /*@__PURE__*/getDefaultExportFromCjs(reactExports);
 
 /**
  * @license React
@@ -53,7 +14,7 @@ var React = /*@__PURE__*/getDefaultExportFromCjs(reactExports);
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-var f=reactExports,k=Symbol.for("react.element"),l=Symbol.for("react.fragment"),m=Object.prototype.hasOwnProperty,n=f.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner,p={key:!0,ref:!0,__self:!0,__source:!0};
+var f=React,k=Symbol.for("react.element"),l=Symbol.for("react.fragment"),m=Object.prototype.hasOwnProperty,n=f.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner,p={key:!0,ref:!0,__self:!0,__source:!0};
 function q(c,a,g){var b,d={},e=null,h=null;void 0!==g&&(e=""+g);void 0!==a.key&&(e=""+a.key);void 0!==a.ref&&(h=a.ref);for(b in a)m.call(a,b)&&!p.hasOwnProperty(b)&&(d[b]=a[b]);if(c&&c.defaultProps)for(b in a=c.defaultProps,a)void 0===d[b]&&(d[b]=a[b]);return {$$typeof:k,type:c,key:e,ref:h,props:d,_owner:n.current}}reactJsxRuntime_production_min.Fragment=l;reactJsxRuntime_production_min.jsx=q;reactJsxRuntime_production_min.jsxs=q;
 
 {
@@ -61,276 +22,6 @@ function q(c,a,g){var b,d={},e=null,h=null;void 0!==g&&(e=""+g);void 0!==a.key&&
 }
 
 var jsxRuntimeExports = jsxRuntime.exports;
-
-const bgStyle1 = 'background: #16a085; color: black;';
-const log = (name, ...args) => {
-    console.log(`%c @decky/ui %c ${name} %c`, bgStyle1, 'background: #1abc9c; color: black;', 'background: transparent;', ...args);
-};
-const group = (name, ...args) => {
-    console.group(`%c @decky/ui %c ${name} %c`, bgStyle1, 'background: #1abc9c; color: black;', 'background: transparent;', ...args);
-};
-const groupEnd = (name, ...args) => {
-    console.groupEnd();
-    if (args?.length > 0)
-        console.log(`^ %c @decky/ui %c ${name} %c`, bgStyle1, 'background: #1abc9c; color: black;', 'background: transparent;', ...args);
-};
-const debug = (name, ...args) => {
-    console.debug(`%c @decky/ui %c ${name} %c`, bgStyle1, 'background: #1abc9c; color: black;', 'color: blue;', ...args);
-};
-const warn = (name, ...args) => {
-    console.warn(`%c @decky/ui %c ${name} %c`, bgStyle1, 'background: #ffbb00; color: black;', 'color: blue;', ...args);
-};
-const error = (name, ...args) => {
-    console.error(`%c @decky/ui %c ${name} %c`, bgStyle1, 'background: #FF0000;', 'background: transparent;', ...args);
-};
-class Logger {
-    constructor(name) {
-        this.name = name;
-        this.name = name;
-    }
-    log(...args) {
-        log(this.name, ...args);
-    }
-    debug(...args) {
-        debug(this.name, ...args);
-    }
-    warn(...args) {
-        warn(this.name, ...args);
-    }
-    error(...args) {
-        error(this.name, ...args);
-    }
-    group(...args) {
-        group(this.name, ...args);
-    }
-    groupEnd(...args) {
-        groupEnd(this.name, ...args);
-    }
-}
-var Logger$1 = Logger;
-
-const logger = new Logger$1('Webpack');
-let modules = new Map();
-function initModuleCache() {
-    const startTime = performance.now();
-    logger.group('Webpack Module Init');
-    const id = Symbol("@decky/ui");
-    let webpackRequire;
-    window.webpackChunksteamui.push([
-        [id],
-        {},
-        (r) => {
-            webpackRequire = r;
-        },
-    ]);
-    logger.log('Initializing all modules. Errors here likely do not matter, as they are usually just failing module side effects.');
-    for (let id of Object.keys(webpackRequire.m)) {
-        try {
-            const module = webpackRequire(id);
-            if (module) {
-                modules.set(id, module);
-            }
-        }
-        catch (e) {
-            logger.debug('Ignoring require error for module', id, e);
-        }
-    }
-    logger.groupEnd(`Modules initialized in ${performance.now() - startTime}ms...`);
-}
-initModuleCache();
-const findModule = (filter) => {
-    for (const m of modules.values()) {
-        if (m.default && filter(m.default))
-            return m.default;
-        if (filter(m))
-            return m;
-    }
-};
-const findModuleDetailsByExport = (filter, minExports) => {
-    for (const [id, m] of modules) {
-        if (!m)
-            continue;
-        for (const mod of [m.default, m]) {
-            if (typeof mod !== 'object')
-                continue;
-            if (mod == window)
-                continue;
-            if (minExports && Object.keys(mod).length < minExports)
-                continue;
-            for (let exportName in mod) {
-                if (mod?.[exportName]) {
-                    try {
-                        const filterRes = filter(mod[exportName], exportName);
-                        if (filterRes) {
-                            return [mod, mod[exportName], exportName, id];
-                        }
-                        else {
-                            continue;
-                        }
-                    }
-                    catch (e) {
-                        logger.warn("Webpack filter threw exception: ", e);
-                    }
-                }
-            }
-        }
-    }
-    return [undefined, undefined, undefined, undefined];
-};
-const findModuleByExport = (filter, minExports) => {
-    return findModuleDetailsByExport(filter, minExports)?.[0];
-};
-const findModuleExport = (filter, minExports) => {
-    return findModuleDetailsByExport(filter, minExports)?.[1];
-};
-const createModuleMapping = (filter) => {
-    const mapping = new Map();
-    for (const [id, m] of modules) {
-        if (m.default && filter(m.default))
-            mapping.set(id, m.default);
-        if (filter(m))
-            mapping.set(id, m);
-    }
-    return mapping;
-};
-const CommonUIModule = findModule((m) => {
-    if (typeof m !== 'object')
-        return false;
-    for (let prop in m) {
-        if (m[prop]?.contextType?._currentValue && Object.keys(m).length > 60)
-            return true;
-    }
-    return false;
-});
-findModuleByExport((e) => e?.toString && /Spinner\),children:\[\(0,\w+\.jsx\)\("path",\{d:"M18 /.test(e.toString()) || /Spinner\)}\)?,.\.createElement\(\"path\",{d:\"M18 /.test(e.toString()));
-findModuleByExport((e) => e.computeRootMatch);
-
-const classModuleMap = createModuleMapping((m) => {
-    if (typeof m == 'object' && !m.__esModule) {
-        const keys = Object.keys(m);
-        if (keys.length == 1 && m.version)
-            return false;
-        if (keys.length > 1000 && m.AboutSettings)
-            return false;
-        return keys.length > 0 && keys.every((k) => !Object.getOwnPropertyDescriptor(m, k)?.get && typeof m[k] == 'string');
-    }
-    return false;
-});
-const classMap = [...classModuleMap.values()];
-function findClassModule(filter) {
-    return classMap.find((m) => filter(m));
-}
-
-const quickAccessMenuClasses = findClassModule((m) => m.Title && m.QuickAccessMenu && m.BatteryDetailsLabels);
-findClassModule((m) => m.ScrollPanel);
-findClassModule((m) => m.GamepadDialogContent && !m.BindingButtons);
-findClassModule((m) => m.BatteryPercentageLabel && m.PanelSection && !m['vr-dashboard-bar-height'] && !m.QuickAccessMenu && !m.QuickAccess && !m.PerfProfileInfo);
-findClassModule((m) => m.OOBEUpdateStatusContainer);
-findClassModule((m) => m.PlayBarDetailLabel);
-findClassModule((m) => m.SliderControlPanelGroup);
-findClassModule((m) => m.TopCapsule);
-findClassModule((m) => m.HeaderLoaded);
-findClassModule((m) => m.BasicUiRoot);
-findClassModule((m) => m.GamepadTabbedPage);
-findClassModule((m) => m.BasicContextMenuModal);
-findClassModule((m) => m.AchievementListItemBase && !m.Page);
-findClassModule((m) => m.AchievementListItemBase && m.Page);
-findClassModule((m) => m.AppRunningControls && m.OverlayAchievements);
-findClassModule((m) => m.AppDetailsRoot);
-findClassModule(m => m.SpinnerLoaderContainer);
-findClassModule(m => m.QuickAccessFooter);
-findClassModule(m => m.PlayButtonContainer);
-findClassModule(m => m.LongTitles && m.GreyBackground);
-findClassModule(m => m.GamepadLibrary);
-findClassModule(m => m.FocusRingRoot);
-findClassModule(m => m.SearchAndTitleContainer);
-findClassModule(m => m.MainBrowserContainer);
-const staticClasses = quickAccessMenuClasses;
-
-(undefined && undefined.__setFunctionName) || function (f, name, prefix) {
-    if (typeof name === "symbol") name = name.description ? "[".concat(name.description, "]") : "";
-    return Object.defineProperty(f, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
-};
-function createPropListRegex(propList, fromStart = true) {
-    let regexString = fromStart ? "const\{" : "";
-    propList.forEach((prop, propIdx) => {
-        regexString += `"?${prop}"?:[a-zA-Z_$]{1,2}`;
-        if (propIdx < propList.length - 1) {
-            regexString += ",";
-        }
-    });
-    return new RegExp(regexString);
-}
-window.SP_REACT?.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?.ReactCurrentDispatcher
-    .current || Object.values(window.SP_REACT?.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE).find((p) => p?.useEffect);
-
-function findSP() {
-    if (document.title == 'SP')
-        return window;
-    const navTrees = getGamepadNavigationTrees();
-    return navTrees?.find((x) => x.m_ID == 'GamepadUI_Full_Root' || x.m_ID == 'root_1_')?.Root?.Element?.ownerDocument?.defaultView;
-}
-function getFocusNavController() {
-    return window.GamepadNavTree?.m_context?.m_controller || window.FocusNavController;
-}
-function getGamepadNavigationTrees() {
-    const focusNav = getFocusNavController();
-    const context = focusNav?.m_ActiveContext || focusNav?.m_LastActiveContext;
-    return context?.m_rgGamepadNavigationTrees;
-}
-
-const buttonItemRegex = createPropListRegex(["highlightOnFocus", "childrenContainerWidth"], false);
-const ButtonItem = Object.values(CommonUIModule).find((mod) => (mod?.render?.toString && buttonItemRegex.test(mod.render.toString())) ||
-    mod?.render?.toString?.().includes('childrenContainerWidth:"min"'));
-
-Object.values(CommonUIModule).find((mod) => mod?.prototype?.SetSelectedOption && mod?.prototype?.BuildMenu);
-const dropdownItemRegex = createPropListRegex(["dropDownControlRef", "description"], false);
-const DropdownItemInternal = Object.values(CommonUIModule).find((mod) => mod?.toString && dropdownItemRegex.test(mod.toString()));
-const DropdownItem = ((args) => jsxRuntimeExports.jsx(DropdownItemInternal, { childrenContainerWidth: "min", ...args }));
-
-const Field = findModuleExport((e) => (e?.toString()?.includes('().Field') && e?.toString()?.includes('"shift-children-below"')) || e?.render?.toString()?.includes('"shift-children-below"'));
-
-const showModalRaw = findModuleExport((e) => typeof e === 'function' && e.toString().includes('props.bDisableBackgroundDismiss') && !e?.prototype?.Cancel);
-const showModal = (modal, parent, props = {
-    strTitle: 'Decky Dialog',
-    bHideMainWindowForPopouts: false,
-}) => {
-    return showModalRaw(modal, parent || findSP() || window, props.strTitle, props, undefined, {
-        bHideActions: props.bHideActionIcons,
-    });
-};
-const ConfirmModal = findModuleExport((e) => e?.toString()?.includes('bUpdateDisabled') && e?.toString()?.includes('closeModal') && e?.toString()?.includes('onGamepadCancel'));
-findModuleExport((e) => typeof e === 'function' && e.toString().includes('Either closeModal or onCancel should be passed to GenericDialog. Classes: ')) ||
-    Object.values(findModule((m) => {
-        if (typeof m !== 'object')
-            return false;
-        for (let prop in m) {
-            if (m[prop]?.m_mapModalManager && Object.values(m)?.find((x) => x?.type)) {
-                return true;
-            }
-        }
-        return false;
-    }) || {})?.find((x) => x?.type?.toString?.()?.includes('((function(){'));
-const [ModalModule, _ModalPosition] = findModuleDetailsByExport((e) => e?.toString().includes('.ModalPosition'), 5);
-const ModalModuleProps = ModalModule ? Object.values(ModalModule) : [];
-ModalModuleProps.find((prop) => {
-    const string = prop?.toString();
-    return string?.includes('.ShowPortalModal()') && string?.includes('.OnElementReadyCallbacks.Register(');
-});
-
-const [mod, panelSection] = findModuleDetailsByExport((e) => e.toString()?.includes('.PanelSection'));
-const PanelSection = panelSection;
-const PanelSectionRow = Object.values(mod).filter((exp) => !exp?.toString?.()?.includes('.PanelSection'))[0];
-
-const TextField = Object.values(CommonUIModule).find((mod) => mod?.validateUrl && mod?.validateEmail);
-
-const ToggleField = Object.values(CommonUIModule).find((mod) => mod?.render?.toString?.()?.includes('ToggleField,fallback') || mod?.render?.toString?.()?.includes("ToggleField\","));
-
-const definePlugin = (fn) => {
-    return (...args) => {
-        return fn(...args);
-    };
-};
 
 var DefaultContext = {
   color: undefined,
@@ -438,9 +129,9 @@ const StatusCard = ({ status, onRefresh }) => {
 };
 
 const ZipSelector = ({ serverAPI, sourceExists, onRefresh, onLogMsg }) => {
-    const [zipList, setZipList] = reactExports.useState([]);
-    const [selectedPath, setSelectedPath] = reactExports.useState("");
-    const [loading, setLoading] = reactExports.useState(false);
+    const [zipList, setZipList] = useState([]);
+    const [selectedPath, setSelectedPath] = useState("");
+    const [loading, setLoading] = useState(false);
     const scanZips = async () => {
         try {
             const res = await serverAPI.callPluginMethod("scan_for_zips", {});
@@ -455,7 +146,7 @@ const ZipSelector = ({ serverAPI, sourceExists, onRefresh, onLogMsg }) => {
             console.error("Failed to scan zips:", e);
         }
     };
-    reactExports.useEffect(() => {
+    useEffect(() => {
         scanZips();
     }, []);
     const handleOpenDolphin = async () => {
@@ -502,7 +193,7 @@ const ZipSelector = ({ serverAPI, sourceExists, onRefresh, onLogMsg }) => {
 };
 
 const ModuleActions = ({ serverAPI, status, onRefresh, onLogMsg }) => {
-    const [working, setWorking] = reactExports.useState(false);
+    const [working, setWorking] = useState(false);
     const isLoaded = status?.is_loaded;
     const isInstalled = status?.is_installed;
     const vermagicMatch = status?.vermagic_match;
@@ -582,14 +273,14 @@ const ModuleActions = ({ serverAPI, status, onRefresh, onLogMsg }) => {
 };
 
 const HvGamesCard = ({ serverAPI, onLogMsg }) => {
-    const [shortcuts, setShortcuts] = reactExports.useState([]);
-    const [selectedAppIds, setSelectedAppIds] = reactExports.useState(new Set());
-    const [watcherStatus, setWatcherStatus] = reactExports.useState({
+    const [shortcuts, setShortcuts] = useState([]);
+    const [selectedAppIds, setSelectedAppIds] = useState(new Set());
+    const [watcherStatus, setWatcherStatus] = useState({
         configured: false,
         active: false,
         appids: []
     });
-    const [loading, setLoading] = reactExports.useState(false);
+    const [loading, setLoading] = useState(false);
     const fetchData = async () => {
         try {
             const [shortcutsRes, statusRes] = await Promise.all([
@@ -608,7 +299,7 @@ const HvGamesCard = ({ serverAPI, onLogMsg }) => {
             console.error("Failed to load HV games data:", e);
         }
     };
-    reactExports.useEffect(() => {
+    useEffect(() => {
         fetchData();
     }, []);
     const toggleAppId = (appid) => {
@@ -661,7 +352,7 @@ const HvGamesCard = ({ serverAPI, onLogMsg }) => {
 };
 
 const UmipCard = ({ serverAPI, umipDisabled, onRefresh, onLogMsg }) => {
-    const [loading, setLoading] = reactExports.useState(false);
+    const [loading, setLoading] = useState(false);
     const handleDisableUmip = async () => {
         setLoading(true);
         onLogMsg("Adding clearcpuid=514 to kernel arguments...");
@@ -682,12 +373,9 @@ const UmipCard = ({ serverAPI, umipDisabled, onRefresh, onLogMsg }) => {
     return (jsxRuntimeExports.jsxs(PanelSection, { title: "UMIP Kernel Argument", children: [jsxRuntimeExports.jsx(PanelSectionRow, { children: jsxRuntimeExports.jsx(Field, { label: "clearcpuid=514 State", children: umipDisabled ? (jsxRuntimeExports.jsxs("span", { style: { color: "#4ade80", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [jsxRuntimeExports.jsx(FaCheck, {}), " UMIP Disabled (Present)"] })) : (jsxRuntimeExports.jsxs("span", { style: { color: "#facc15", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [jsxRuntimeExports.jsx(FaExclamationTriangle, {}), " Default (UMIP Active)"] })) }) }), !umipDisabled && (jsxRuntimeExports.jsx(PanelSectionRow, { children: jsxRuntimeExports.jsx(ButtonItem, { layout: "below", disabled: loading, onClick: handleDisableUmip, children: jsxRuntimeExports.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [jsxRuntimeExports.jsx(FaShieldAlt, {}), " Disable UMIP (rpm-ostree kargs)"] }) }) })), jsxRuntimeExports.jsx(PanelSectionRow, { children: jsxRuntimeExports.jsxs("div", { style: { fontSize: "11px", color: "#9ca3af" }, children: ["Disabling UMIP appends ", jsxRuntimeExports.jsx("code", { children: "clearcpuid=514" }), " to Bazzite kernel args, allowing instructions like ", jsxRuntimeExports.jsx("code", { children: "SIDT" }), "/", jsxRuntimeExports.jsx("code", { children: "SGDT" }), " to be emulated without triggering access faults. Requires a reboot after applying."] }) })] }));
 };
 
-if (typeof window !== "undefined" && typeof window.process === "undefined") {
-    window.process = { env: { NODE_ENV: "production" } };
-}
 const Content = ({ serverAPI }) => {
-    const [status, setStatus] = reactExports.useState(null);
-    const [logMsg, setLogMsg] = reactExports.useState("");
+    const [status, setStatus] = useState(null);
+    const [logMsg, setLogMsg] = useState("");
     const refreshStatus = async () => {
         try {
             const res = await serverAPI.callPluginMethod("get_system_status", {});
@@ -699,7 +387,7 @@ const Content = ({ serverAPI }) => {
             console.error("Failed to fetch system status:", e);
         }
     };
-    reactExports.useEffect(() => {
+    useEffect(() => {
         refreshStatus();
         const interval = setInterval(refreshStatus, 8000);
         return () => clearInterval(interval);
