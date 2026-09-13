@@ -90,6 +90,8 @@ function FaWrench (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 384 512"},"child":[{"tag":"path","attr":{"d":"M377 105L279.1 7c-4.5-4.5-10.6-7-17-7H256v128h128v-6.1c0-6.3-2.5-12.4-7-16.9zM128.4 336c-17.9 0-32.4 12.1-32.4 27 0 15 14.6 27 32.5 27s32.4-12.1 32.4-27-14.6-27-32.5-27zM224 136V0h-63.6v32h-32V0H24C10.7 0 0 10.7 0 24v464c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H248c-13.2 0-24-10.8-24-24zM95.9 32h32v32h-32zm32.3 384c-33.2 0-58-30.4-51.4-62.9L96.4 256v-32h32v-32h-32v-32h32v-32h-32V96h32V64h32v32h-32v32h32v32h-32v32h32v32h-32v32h22.1c5.7 0 10.7 4.1 11.8 9.7l17.3 87.7c6.4 32.4-18.4 62.6-51.4 62.6z"},"child":[]}]})(props);
 }function FaExclamationTriangle (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 576 512"},"child":[{"tag":"path","attr":{"d":"M569.517 440.013C587.975 472.007 564.806 512 527.94 512H48.054c-36.937 0-59.999-40.055-41.577-71.987L246.423 23.985c18.467-32.009 64.72-31.951 83.154 0l239.94 416.028zM288 354c-25.405 0-46 20.595-46 46s20.595 46 46 46 46-20.595 46-46-20.595-46-46-46zm-43.673-165.346l7.418 136c.347 6.364 5.609 11.346 11.982 11.346h48.546c6.373 0 11.635-4.982 11.982-11.346l7.418-136c.375-6.874-5.098-12.654-11.982-12.654h-63.383c-6.884 0-12.356 5.78-11.981 12.654z"},"child":[]}]})(props);
+}function FaCopy (props) {
+  return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 448 512"},"child":[{"tag":"path","attr":{"d":"M320 448v40c0 13.255-10.745 24-24 24H24c-13.255 0-24-10.745-24-24V120c0-13.255 10.745-24 24-24h72v296c0 30.879 25.121 56 56 56h168zm0-344V0H152c-13.255 0-24 10.745-24 24v368c0 13.255 10.745 24 24 24h272c13.255 0 24-10.745 24-24V128H344c-13.2 0-24-10.8-24-24zm120.971-31.029L375.029 7.029A24 24 0 0 0 358.059 0H352v96h96v-6.059a24 24 0 0 0-7.029-16.97z"},"child":[]}]})(props);
 }function FaClipboardCheck (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 384 512"},"child":[{"tag":"path","attr":{"d":"M336 64h-80c0-35.3-28.7-64-64-64s-64 28.7-64 64H48C21.5 64 0 85.5 0 112v352c0 26.5 21.5 48 48 48h288c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48zM192 40c13.3 0 24 10.7 24 24s-10.7 24-24 24-24-10.7-24-24 10.7-24 24-24zm121.2 231.8l-143 141.8c-4.7 4.7-12.3 4.6-17-.1l-82.6-83.3c-4.7-4.7-4.6-12.3.1-17L99.1 285c4.7-4.7 12.3-4.6 17 .1l46 46.4 106-105.2c4.7-4.7 12.3-4.6 17 .1l28.2 28.4c4.7 4.8 4.6 12.3-.1 17z"},"child":[]}]})(props);
 }function FaCheck (props) {
@@ -798,12 +800,48 @@ const TabBar = ({ tabs, activeTab, onSelect }) => (SP_JSX.jsx(DFL.Focusable, { "
             }, children: [SP_JSX.jsx("span", { style: { fontSize: "15px", display: "flex" }, children: tab.icon }), SP_JSX.jsx("span", { style: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }, children: tab.label })] }, tab.id));
     }) }));
 
+// The Quick Access panel is rendered in a different window than the plugin's JS context, so use the
+// clicked element's own document/window for clipboard access, falling back to execCommand("copy").
+async function copyText(text, doc) {
+    const targetDoc = doc ?? document;
+    const targetWindow = targetDoc.defaultView ?? window;
+    try {
+        if (targetWindow.navigator?.clipboard?.writeText) {
+            await targetWindow.navigator.clipboard.writeText(text);
+            return true;
+        }
+    }
+    catch (e) {
+        console.warn("[HV Control] clipboard.writeText failed, trying execCommand", e);
+    }
+    try {
+        const textarea = targetDoc.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.top = "0";
+        textarea.style.left = "0";
+        textarea.style.opacity = "0";
+        targetDoc.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = targetDoc.execCommand("copy");
+        targetDoc.body.removeChild(textarea);
+        return ok;
+    }
+    catch (e) {
+        console.error("[HV Control] execCommand copy failed", e);
+        return false;
+    }
+}
+
 const LEVEL_COLORS = {
     info: "#d1d5db",
     warn: "#facc15",
     error: "#f87171"
 };
 const MAX_SHOWN = 60;
+const BACKEND_COPY_LINES = 500;
 const logBoxStyle = {
     fontFamily: "monospace",
     fontSize: "10px",
@@ -816,18 +854,39 @@ const logBoxStyle = {
     wordBreak: "break-all",
     whiteSpace: "pre-wrap"
 };
+const formatEntry = (entry) => `${new Date(entry.time).toLocaleTimeString()} [${entry.level.toUpperCase()}] ${entry.message}`;
+const buttonLabel = (icon, text) => (SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [icon, " ", text] }));
 const LogsView = () => {
     const entries = useLogs();
     const [backendLines, setBackendLines] = SP_REACT.useState(null);
     const [backendPath, setBackendPath] = SP_REACT.useState("");
     const [loading, setLoading] = SP_REACT.useState(false);
+    const [copying, setCopying] = SP_REACT.useState(false);
+    const containerRef = SP_REACT.useRef(null);
+    const copy = async (what, text) => {
+        if (!text.trim()) {
+            toaster.toast({ title: "CPUID & HV Controls", body: `${what} is empty, nothing to copy.` });
+            return;
+        }
+        const ok = await copyText(text, containerRef.current?.ownerDocument);
+        const lineCount = text.split("\n").length;
+        toaster.toast({
+            title: "CPUID & HV Controls",
+            body: ok ? `Copied ${what} (${lineCount} lines) to the clipboard.` : `Couldn't copy ${what} to the clipboard.`
+        });
+    };
+    const fetchBackendLog = async (lines) => {
+        const res = await getBackendLog(lines);
+        setBackendPath(res.path || "");
+        const result = res.success ? res.lines : [res.message];
+        setBackendLines(result.slice(-150));
+        return result;
+    };
     const loadBackendLog = async () => {
         logAction("Load Backend Log");
         setLoading(true);
         try {
-            const res = await getBackendLog(150);
-            setBackendPath(res.path || "");
-            setBackendLines(res.success ? res.lines : [res.message]);
+            await fetchBackendLog(150);
         }
         catch (e) {
             setBackendLines([`Could not reach the backend: ${e?.message || e}`]);
@@ -836,10 +895,39 @@ const LogsView = () => {
             setLoading(false);
         }
     };
+    const copyPluginLog = () => {
+        logAction("Copy Plugin Log");
+        copy("the plugin log", entries.map(formatEntry).join("\n"));
+    };
+    const copyLastTrace = () => {
+        logAction("Copy Last Module Trace");
+        const ids = entries.map((e) => e.message.match(/\[HVMOD ([0-9a-f]+)\]/)?.[1]).filter(Boolean);
+        const lastId = ids[ids.length - 1];
+        if (!lastId) {
+            toaster.toast({ title: "CPUID & HV Controls", body: "No module trace yet. Press Start Module first." });
+            return;
+        }
+        copy(`module trace ${lastId}`, entries.filter((e) => e.message.includes(`[HVMOD ${lastId}]`)).map(formatEntry).join("\n"));
+    };
+    const copyBackendLog = async () => {
+        logAction("Copy Backend Log");
+        setCopying(true);
+        try {
+            // Fetch fresh so the copy includes everything up to now, not just what was last loaded
+            const lines = await fetchBackendLog(BACKEND_COPY_LINES);
+            await copy("the backend log", lines.join("\n"));
+        }
+        catch (e) {
+            toaster.toast({ title: "CPUID & HV Controls", body: `Couldn't read the backend log: ${e?.message || e}` });
+        }
+        finally {
+            setCopying(false);
+        }
+    };
     const shown = entries.slice(-MAX_SHOWN).reverse();
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: `Plugin Log (${entries.length})`, children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: logBoxStyle, children: shown.length === 0
+    return (SP_JSX.jsxs("div", { ref: containerRef, children: [SP_JSX.jsxs(DFL.PanelSection, { title: `Plugin Log (${entries.length})`, children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: logBoxStyle, children: shown.length === 0
                                 ? "No activity yet."
-                                : shown.map((entry) => (SP_JSX.jsxs("div", { style: { color: LEVEL_COLORS[entry.level] }, children: [new Date(entry.time).toLocaleTimeString(), " ", entry.message] }, entry.id))) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: clearLogs, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaTrash, {}), " Clear Plugin Log"] }) }) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "Backend Log", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: loadBackendLog, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaServer, {}), " ", loading ? "Loading..." : backendLines ? "Reload Backend Log" : "Load Backend Log"] }) }) }), backendLines && (SP_JSX.jsxs(DFL.PanelSectionRow, { children: [SP_JSX.jsx("div", { style: { fontSize: "10px", color: "#9ca3af", marginBottom: "4px", wordBreak: "break-all" }, children: backendPath }), SP_JSX.jsx("div", { style: logBoxStyle, children: backendLines.length === 0 ? "Backend log is empty." : [...backendLines].reverse().join("\n") })] }))] })] }));
+                                : shown.map((entry) => (SP_JSX.jsxs("div", { style: { color: LEVEL_COLORS[entry.level] }, children: [new Date(entry.time).toLocaleTimeString(), " ", entry.message] }, entry.id))) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: copyPluginLog, children: buttonLabel(SP_JSX.jsx(FaCopy, {}), "Copy Plugin Log") }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: copyLastTrace, children: buttonLabel(SP_JSX.jsx(FaCopy, {}), "Copy Last Module Trace") }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: clearLogs, children: buttonLabel(SP_JSX.jsx(FaTrash, {}), "Clear Plugin Log") }) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "Backend Log", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: loadBackendLog, children: buttonLabel(SP_JSX.jsx(FaServer, {}), loading ? "Loading..." : backendLines ? "Reload Backend Log" : "Load Backend Log") }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: copying, onClick: copyBackendLog, children: buttonLabel(SP_JSX.jsx(FaCopy, {}), copying ? "Copying..." : `Copy Backend Log (last ${BACKEND_COPY_LINES} lines)`) }) }), backendLines && (SP_JSX.jsxs(DFL.PanelSectionRow, { children: [SP_JSX.jsx("div", { style: { fontSize: "10px", color: "#9ca3af", marginBottom: "4px", wordBreak: "break-all" }, children: backendPath }), SP_JSX.jsx("div", { style: logBoxStyle, children: backendLines.length === 0 ? "Backend log is empty." : [...backendLines].reverse().join("\n") })] }))] })] }));
 };
 
 const TABS = [
