@@ -94,7 +94,7 @@ MODULE_FILE = os.path.join(MODULE_DIR, "cpuid_fault_emulation.ko")
 HV_GAMES_SERVICE = "/etc/systemd/system/hv-games.service"
 # Bump together with EXPECTED_BACKEND_API in src/lib/version.ts whenever the frontend relies on new backend
 # behaviour. Lets the panel detect a stale main.py (not copied, or Decky not restarted after updating).
-BACKEND_API = 7
+BACKEND_API = 8
 
 
 def get_invoking_user():
