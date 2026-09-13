@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { usePersistentState } from "../lib/persist";
 import { PanelSection, PanelSectionRow, ButtonItem, DropdownItem, Field, ConfirmModal, showModal } from "@decky/ui";
 import { FaTrash, FaClipboardCheck, FaExclamationTriangle } from "react-icons/fa";
 import { listInstalledPatches, checkPatch, removePatch } from "../lib/api";
@@ -27,7 +28,7 @@ interface InstalledPatchesProps {
 
 export const InstalledPatches: React.FC<InstalledPatchesProps> = ({ onLogMsg, refreshKey }) => {
   const [patches, setPatches] = useState<InstalledPatch[]>([]);
-  const [selectedId, setSelectedId] = useState<string>("");
+  const [selectedId, setSelectedId] = usePersistentState<string>("patches.selected", "");
   const [check, setCheck] = useState<CheckResult | null>(null);
   const [needsForce, setNeedsForce] = useState<boolean>(false);
   const [working, setWorking] = useState<boolean>(false);

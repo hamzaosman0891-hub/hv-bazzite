@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem, TextField, DropdownItem, Field } from "@decky/ui";
+import { usePersistentState } from "../lib/persist";
+import { PathField } from "./PathField";
+import { PanelSection, PanelSectionRow, ButtonItem, DropdownItem, Field } from "@decky/ui";
 import { FaFolderOpen, FaFileArchive } from "react-icons/fa";
 import { scanForZips, openInDolphin, extractCpuidZip } from "../lib/api";
 
@@ -16,8 +18,8 @@ interface ZipSelectorProps {
 }
 
 export const ZipSelector: React.FC<ZipSelectorProps> = ({ sourceExists, onRefresh, onLogMsg }) => {
-  const [zipList, setZipList] = useState<ZipItem[]>([]);
-  const [selectedPath, setSelectedPath] = useState<string>("");
+  const [zipList, setZipList] = usePersistentState<ZipItem[]>("zip.list", []);
+  const [selectedPath, setSelectedPath] = usePersistentState<string>("zip.selected", "");
   const [loading, setLoading] = useState<boolean>(false);
 
   const scanZips = async () => {
@@ -25,9 +27,8 @@ export const ZipSelector: React.FC<ZipSelectorProps> = ({ sourceExists, onRefres
       const res = await scanForZips();
       if (res && Array.isArray(res)) {
         setZipList(res);
-        if (res.length > 0 && !selectedPath) {
-          setSelectedPath(res[0].path);
-        }
+        // Only default to the first zip when nothing has been chosen or typed yet
+        setSelectedPath((prev) => prev || (res.length > 0 ? res[0].path : ""));
       }
     } catch (e) {
       console.error("Failed to scan zips:", e);
@@ -100,10 +101,10 @@ export const ZipSelector: React.FC<ZipSelectorProps> = ({ sourceExists, onRefres
       )}
 
       <PanelSectionRow>
-        <TextField
+        <PathField
           label="Zip Archive Path"
           value={selectedPath}
-          onChange={(e) => setSelectedPath(e.target.value)}
+          onChange={setSelectedPath}
         />
       </PanelSectionRow>
 

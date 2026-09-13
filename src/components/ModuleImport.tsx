@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { usePersistentState } from "../lib/persist";
 import { PanelSection, PanelSectionRow, ButtonItem, DropdownItem } from "@decky/ui";
 import { FaFileImport, FaSearch } from "react-icons/fa";
 import { findModuleSources, importModuleSource } from "../lib/api";
@@ -18,8 +19,8 @@ const describe = (s: ModuleSource) =>
   s.matches_kernel ? "built, ready" : s.has_ko ? "built, old kernel" : "source only";
 
 export const ModuleImport: React.FC<ModuleImportProps> = ({ onRefresh, onLogMsg }) => {
-  const [sources, setSources] = useState<ModuleSource[]>([]);
-  const [selected, setSelected] = useState<string>("");
+  const [sources, setSources] = usePersistentState<ModuleSource[]>("module.sources", []);
+  const [selected, setSelected] = usePersistentState<string>("module.selected", "");
   const [scanning, setScanning] = useState<boolean>(false);
   const [importing, setImporting] = useState<boolean>(false);
 
@@ -29,7 +30,9 @@ export const ModuleImport: React.FC<ModuleImportProps> = ({ onRefresh, onLogMsg 
       const res = await findModuleSources();
       if (Array.isArray(res)) {
         setSources(res);
-        setSelected(res.length > 0 ? res[0].path : "");
+        setSelected((prev) =>
+          res.some((s: ModuleSource) => s.path === prev) ? prev : res.length > 0 ? res[0].path : ""
+        );
       }
     } catch (e) {
       console.error("Failed to find module folders:", e);

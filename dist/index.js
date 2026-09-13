@@ -155,18 +155,53 @@ const StatusCard = ({ status, onRefresh }) => {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "System & Module Status", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Gaming OS", children: SP_JSX.jsx("span", { style: { textTransform: "capitalize", fontWeight: 600 }, children: status.os_type }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Kernel Version", children: SP_JSX.jsx("span", { children: status.kernel_release }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Module Status", children: renderBadge() }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "UMIP (clearcpuid=514)", children: status.umip_disabled ? (SP_JSX.jsx("span", { style: { color: "#4ade80" }, children: "Disabled" })) : (SP_JSX.jsx("span", { style: { color: "#facc15" }, children: "Enabled (Default)" })) }) }), status.native_support && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { padding: "8px", background: "rgba(59, 130, 246, 0.1)", borderRadius: "6px", fontSize: "12px" }, children: "\uD83D\uDCA1 Your CPU natively supports CPUID faulting. Kernel module is optional." }) }))] }));
 };
 
+// Decky remounts panel content (closing the menu, opening a dropdown popup, switching tabs),
+// which wipes plain useState. Keep selections at module level so they survive remounts.
+const store = new Map();
+function usePersistentState(key, initial) {
+    const [value, setValue] = SP_REACT.useState(() => (store.has(key) ? store.get(key) : initial));
+    const update = SP_REACT.useCallback((next) => {
+        setValue((prev) => {
+            const resolved = typeof next === "function" ? next(prev) : next;
+            store.set(key, resolved);
+            return resolved;
+        });
+    }, [key]);
+    return [value, update];
+}
+
+// Steam's TextField can fire onChange with the text it is still showing (e.g. when focus moves
+// to or back from a dropdown popup), which overwrote the path just picked from the dropdown.
+// Only report text that differs from what the field shows, and remount the field when the value
+// changes from outside so it displays the newly picked path.
+const PathField = ({ label, value, onChange }) => {
+    const shown = SP_REACT.useRef(value);
+    const version = SP_REACT.useRef(0);
+    if (value !== shown.current) {
+        shown.current = value;
+        version.current += 1;
+    }
+    return (SP_JSX.jsx(DFL.TextField, { label: label, value: value, onChange: (e) => {
+            const next = e.target.value;
+            if (next === shown.current)
+                return;
+            // Typed change: record it first so the parent's re-render doesn't remount mid-typing
+            shown.current = next;
+            onChange(next);
+        } }, version.current));
+};
+
 const ZipSelector = ({ sourceExists, onRefresh, onLogMsg }) => {
-    const [zipList, setZipList] = SP_REACT.useState([]);
-    const [selectedPath, setSelectedPath] = SP_REACT.useState("");
+    const [zipList, setZipList] = usePersistentState("zip.list", []);
+    const [selectedPath, setSelectedPath] = usePersistentState("zip.selected", "");
     const [loading, setLoading] = SP_REACT.useState(false);
     const scanZips = async () => {
         try {
             const res = await scanForZips();
             if (res && Array.isArray(res)) {
                 setZipList(res);
-                if (res.length > 0 && !selectedPath) {
-                    setSelectedPath(res[0].path);
-                }
+                // Only default to the first zip when nothing has been chosen or typed yet
+                setSelectedPath((prev) => prev || (res.length > 0 ? res[0].path : ""));
             }
         }
         catch (e) {
@@ -216,13 +251,13 @@ const ZipSelector = ({ sourceExists, onRefresh, onLogMsg }) => {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "CPUID Emulation Source (.zip)", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Source Folder State", children: sourceExists ? (SP_JSX.jsx("span", { style: { color: "#4ade80", fontWeight: 600 }, children: "Source Available" })) : (SP_JSX.jsx("span", { style: { color: "#f87171", fontWeight: 600 }, children: "Source Missing" })) }) }), zipList.length > 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Scanned Zip Files", rgOptions: zipList.map((z) => ({
                         data: z.path,
                         label: `${z.name} (${(z.size / 1024 / 1024).toFixed(1)} MB)`
-                    })), selectedOption: selectedPath, onChange: (opt) => setSelectedPath(opt.data) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Zip Archive Path", value: selectedPath, onChange: (e) => setSelectedPath(e.target.value) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", gap: "8px", width: "100%" }, children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: handleOpenDolphin, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFolderOpen, {}), " Open Location in Dolphin"] }) }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading || !selectedPath, onClick: handleExtractZip, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileArchive, {}), " Extract & Prepare Zip"] }) }) })] }));
+                    })), selectedOption: selectedPath, onChange: (opt) => setSelectedPath(opt.data) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(PathField, { label: "Zip Archive Path", value: selectedPath, onChange: setSelectedPath }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { display: "flex", gap: "8px", width: "100%" }, children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: handleOpenDolphin, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFolderOpen, {}), " Open Location in Dolphin"] }) }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading || !selectedPath, onClick: handleExtractZip, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileArchive, {}), " Extract & Prepare Zip"] }) }) })] }));
 };
 
 const describe = (s) => s.matches_kernel ? "built, ready" : s.has_ko ? "built, old kernel" : "source only";
 const ModuleImport = ({ onRefresh, onLogMsg }) => {
-    const [sources, setSources] = SP_REACT.useState([]);
-    const [selected, setSelected] = SP_REACT.useState("");
+    const [sources, setSources] = usePersistentState("module.sources", []);
+    const [selected, setSelected] = usePersistentState("module.selected", "");
     const [scanning, setScanning] = SP_REACT.useState(false);
     const [importing, setImporting] = SP_REACT.useState(false);
     const scan = async () => {
@@ -231,7 +266,7 @@ const ModuleImport = ({ onRefresh, onLogMsg }) => {
             const res = await findModuleSources();
             if (Array.isArray(res)) {
                 setSources(res);
-                setSelected(res.length > 0 ? res[0].path : "");
+                setSelected((prev) => res.some((s) => s.path === prev) ? prev : res.length > 0 ? res[0].path : "");
             }
         }
         catch (e) {
@@ -448,13 +483,13 @@ const UmipCard = ({ umipDisabled, onRefresh, onLogMsg }) => {
 
 const fileName = (path) => path.split("/").pop() || path;
 const PatchCard = ({ onLogMsg, onApplied }) => {
-    const [games, setGames] = SP_REACT.useState([]);
-    const [selectedGameId, setSelectedGameId] = SP_REACT.useState("");
-    const [exeCandidates, setExeCandidates] = SP_REACT.useState([]);
-    const [selectedExe, setSelectedExe] = SP_REACT.useState("");
+    const [games, setGames] = usePersistentState("patch.games", []);
+    const [selectedGameId, setSelectedGameId] = usePersistentState("patch.game", "");
+    const [exeCandidates, setExeCandidates] = usePersistentState("patch.exeCandidates", []);
+    const [selectedExe, setSelectedExe] = usePersistentState("patch.exe", "");
     const [searching, setSearching] = SP_REACT.useState(false);
-    const [patches, setPatches] = SP_REACT.useState([]);
-    const [patchPath, setPatchPath] = SP_REACT.useState("");
+    const [patches, setPatches] = usePersistentState("patch.archives", []);
+    const [patchPath, setPatchPath] = usePersistentState("patch.archive", "");
     const [applying, setApplying] = SP_REACT.useState(false);
     const loadLists = async () => {
         try {
@@ -463,8 +498,7 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
                 setGames(gamesRes);
             if (Array.isArray(patchesRes)) {
                 setPatches(patchesRes);
-                if (patchesRes.length > 0 && !patchPath)
-                    setPatchPath(patchesRes[0].path);
+                setPatchPath((prev) => prev || (patchesRes.length > 0 ? patchesRes[0].path : ""));
             }
         }
         catch (e) {
@@ -526,12 +560,12 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
                     })), selectedOption: selectedGameId, onChange: (opt) => selectGame(opt.data) }) }), selectedGameId && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Shipping EXE", children: searching ? (SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#9ca3af" }, children: [SP_JSX.jsx(FaSearch, {}), " Searching..."] })) : selectedExe ? (SP_JSX.jsx("span", { style: { color: "#4ade80", fontWeight: 600, wordBreak: "break-all" }, children: fileName(selectedExe) })) : (SP_JSX.jsx("span", { style: { color: "#f87171", fontWeight: 600 }, children: "Not Found" })) }) })), exeCandidates.length > 1 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Multiple EXEs found", rgOptions: exeCandidates.map((c) => ({ data: c, label: c })), selectedOption: selectedExe, onChange: (opt) => setSelectedExe(opt.data) }) })), selectedExeDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { fontSize: "11px", color: "#9ca3af", wordBreak: "break-all" }, children: ["Target: ", selectedExeDir] }) })), patches.length > 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Patch Archive", rgOptions: patches.map((p) => ({
                         data: p.path,
                         label: `${p.name} (${(p.size / 1024 / 1024).toFixed(1)} MB)`
-                    })), selectedOption: patchPath, onChange: (opt) => setPatchPath(opt.data) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Patch Path (.zip / .7z / .rar)", value: patchPath, onChange: (e) => setPatchPath(e.target.value) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying, onClick: loadLists, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaSync, {}), " Rescan Games & Patches"] }) }) }), selectedExeDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => openInDolphin(selectedExeDir), children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFolderOpen, {}), " Open Game Folder in Dolphin"] }) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying || searching || !selectedExe || !patchPath, onClick: handleApply, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileArchive, {}), " ", applying ? "Applying Patch..." : "Apply Patch to Game"] }) }) })] }));
+                    })), selectedOption: patchPath, onChange: (opt) => setPatchPath(opt.data) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(PathField, { label: "Patch Path (.zip / .7z / .rar)", value: patchPath, onChange: setPatchPath }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying, onClick: loadLists, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaSync, {}), " Rescan Games & Patches"] }) }) }), selectedExeDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => openInDolphin(selectedExeDir), children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFolderOpen, {}), " Open Game Folder in Dolphin"] }) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying || searching || !selectedExe || !patchPath, onClick: handleApply, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileArchive, {}), " ", applying ? "Applying Patch..." : "Apply Patch to Game"] }) }) })] }));
 };
 
 const InstalledPatches = ({ onLogMsg, refreshKey }) => {
     const [patches, setPatches] = SP_REACT.useState([]);
-    const [selectedId, setSelectedId] = SP_REACT.useState("");
+    const [selectedId, setSelectedId] = usePersistentState("patches.selected", "");
     const [check, setCheck] = SP_REACT.useState(null);
     const [needsForce, setNeedsForce] = SP_REACT.useState(false);
     const [working, setWorking] = SP_REACT.useState(false);

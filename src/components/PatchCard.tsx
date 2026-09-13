@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem, TextField, DropdownItem, Field, ConfirmModal, showModal } from "@decky/ui";
+import { usePersistentState } from "../lib/persist";
+import { PathField } from "./PathField";
+import { PanelSection, PanelSectionRow, ButtonItem, DropdownItem, Field, ConfirmModal, showModal } from "@decky/ui";
 import { FaFileArchive, FaSearch, FaSync, FaFolderOpen } from "react-icons/fa";
 import { getPatchableGames, findGameShippingExe, scanForPatches, applyHvPatch, openInDolphin } from "../lib/api";
 
@@ -25,13 +27,13 @@ interface PatchCardProps {
 const fileName = (path: string) => path.split("/").pop() || path;
 
 export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => {
-  const [games, setGames] = useState<GameItem[]>([]);
-  const [selectedGameId, setSelectedGameId] = useState<string>("");
-  const [exeCandidates, setExeCandidates] = useState<string[]>([]);
-  const [selectedExe, setSelectedExe] = useState<string>("");
+  const [games, setGames] = usePersistentState<GameItem[]>("patch.games", []);
+  const [selectedGameId, setSelectedGameId] = usePersistentState<string>("patch.game", "");
+  const [exeCandidates, setExeCandidates] = usePersistentState<string[]>("patch.exeCandidates", []);
+  const [selectedExe, setSelectedExe] = usePersistentState<string>("patch.exe", "");
   const [searching, setSearching] = useState<boolean>(false);
-  const [patches, setPatches] = useState<PatchItem[]>([]);
-  const [patchPath, setPatchPath] = useState<string>("");
+  const [patches, setPatches] = usePersistentState<PatchItem[]>("patch.archives", []);
+  const [patchPath, setPatchPath] = usePersistentState<string>("patch.archive", "");
   const [applying, setApplying] = useState<boolean>(false);
 
   const loadLists = async () => {
@@ -40,7 +42,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
       if (Array.isArray(gamesRes)) setGames(gamesRes);
       if (Array.isArray(patchesRes)) {
         setPatches(patchesRes);
-        if (patchesRes.length > 0 && !patchPath) setPatchPath(patchesRes[0].path);
+        setPatchPath((prev) => prev || (patchesRes.length > 0 ? patchesRes[0].path : ""));
       }
     } catch (e) {
       console.error("Failed to load patch data:", e);
@@ -167,10 +169,10 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
       )}
 
       <PanelSectionRow>
-        <TextField
+        <PathField
           label="Patch Path (.zip / .7z / .rar)"
           value={patchPath}
-          onChange={(e) => setPatchPath(e.target.value)}
+          onChange={setPatchPath}
         />
       </PanelSectionRow>
 
