@@ -1,0 +1,7 @@
+{
+  "name": "CPUID Emulation & HV Controls",
+  "author": "Pareidolia",
+  "version": "1.0.0",
+  "flags": ["root"],
+  "main": "py_modules/main.py"
+}
