@@ -242,7 +242,7 @@ def parse_shortcuts_vdf(vdf_path):
 # Custom HV patch helpers
 # ---------------------------------------------------------------------------
 
-PATCH_ARCHIVE_EXTS = (".zip", ".7z")
+PATCH_ARCHIVE_EXTS = (".zip", ".7z", ".rar")
 SHIPPING_EXE_RE = re.compile(r"-Win(64|GDK)-Shipping\.exe$", re.IGNORECASE)
 IGNORED_STEAM_APPS = ("proton", "steam linux runtime", "steamworks common", "steamvr")
 
@@ -410,32 +410,51 @@ def safe_extract_zip(archive_path, dest):
         zf.extractall(dest)
 
 
-def extract_7z(archive_path, dest):
-    env = os.environ.copy()
-    # Decky's bundled Python sets LD_LIBRARY_PATH, which can break system binaries
-    env.pop("LD_LIBRARY_PATH", None)
+def archive_extract_commands(archive_path, dest):
+    """Extractor commands to try in order, per archive type."""
+    sevenzip = [[tool, "x", "-y", f"-o{dest}", archive_path] for tool in ("7z", "7zz", "7za")]
+    bsdtar = [["bsdtar", "-xf", archive_path, "-C", dest]]
+    unar = [["unar", "-f", "-q", "-o", dest, archive_path]]
+    if archive_path.lower().endswith(".rar"):
+        # 7za has no RAR support; bsdtar only handles some RAR5 archives, so it goes last
+        unrar = [["unrar", "x", "-o+", "-y", archive_path, dest + os.sep]]
+        return unrar + [c for c in sevenzip if c[0] != "7za"] + unar + bsdtar
+    return sevenzip + bsdtar + unar
 
-    for tool in ("7z", "7zz", "7za"):
-        if command_exists(tool):
-            res = subprocess.run([tool, "x", "-y", f"-o{dest}", archive_path],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-            if res.returncode != 0:
-                raise RuntimeError(f"{tool} failed: {res.stderr.strip() or res.stdout.strip()}")
+
+def extract_with_tools(archive_path, dest):
+    env = clean_env()
+    errors = []
+    for cmd in archive_extract_commands(archive_path, dest):
+        if not command_exists(cmd[0]):
+            continue
+        # Start clean so a failed attempt can't leave partial files behind
+        for entry in os.listdir(dest):
+            path = os.path.join(dest, entry)
+            if os.path.isdir(path) and not os.path.islink(path):
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                os.remove(path)
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        if res.returncode == 0:
             return
-    if command_exists("bsdtar"):
-        res = subprocess.run(["bsdtar", "-xf", archive_path, "-C", dest],
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-        if res.returncode != 0:
-            raise RuntimeError(f"bsdtar failed: {res.stderr.strip()}")
-        return
-    try:
-        import py7zr
-        with py7zr.SevenZipFile(archive_path, "r") as sz:
-            sz.extractall(dest)
-        return
-    except ImportError:
-        pass
-    raise RuntimeError("No 7z extractor found. Install 7zip (7z/7zz) or bsdtar, or use a .zip patch.")
+        output = (res.stderr or res.stdout).strip().splitlines()
+        errors.append(f"{cmd[0]}: {output[-1] if output else 'failed'}")
+
+    if archive_path.lower().endswith(".7z"):
+        try:
+            import py7zr
+            with py7zr.SevenZipFile(archive_path, "r") as sz:
+                sz.extractall(dest)
+            return
+        except ImportError:
+            pass
+
+    kind = "RAR" if archive_path.lower().endswith(".rar") else "7z"
+    if errors:
+        raise RuntimeError(f"Could not extract {kind} archive. " + "; ".join(errors))
+    tools = "unrar, 7zip (7z/7zz), unar or bsdtar" if kind == "RAR" else "7zip (7z/7zz), bsdtar or unar"
+    raise RuntimeError(f"No {kind} extractor found. Install {tools}, or use a .zip patch.")
 
 
 def locate_patch_root(extracted_dir, exe_name):
@@ -485,6 +504,8 @@ def copy_patch_tree(src_root, dest_dir, backup_dir, uid, gid, manifest):
             manifest["created_dirs"].append(os.path.relpath(target_root, dest_dir))
         for f in files:
             src = os.path.join(root, f)
+            if os.path.islink(src):
+                continue
             dst = os.path.join(target_root, f)
             rel_path = os.path.relpath(dst, dest_dir)
             entry = {"path": rel_path, "action": "added", "sha256": file_sha256(src)}
@@ -1160,7 +1181,7 @@ WantedBy=multi-user.target
         return {"success": True, "message": f"Found {os.path.basename(candidates[0])}", "candidates": candidates}
 
     async def scan_for_patches(self):
-        """Scans common download locations for .zip/.7z patch archives."""
+        """Scans common download locations for .zip/.7z/.rar patch archives."""
         home = get_user_home(get_invoking_user())
         search_dirs = [os.path.join(home, "Downloads"), os.path.join(home, "Desktop"), home]
         found = []
@@ -1182,7 +1203,7 @@ WantedBy=multi-user.target
         if not archive_path or not os.path.isfile(archive_path):
             return {"success": False, "message": f"Patch archive not found: {archive_path}"}
         if not archive_path.lower().endswith(PATCH_ARCHIVE_EXTS):
-            return {"success": False, "message": "Patch must be a .zip or .7z archive."}
+            return {"success": False, "message": "Patch must be a .zip, .7z or .rar archive."}
 
         target_dir = os.path.dirname(exe_path)
         user_info = pwd.getpwnam(get_invoking_user())
@@ -1206,7 +1227,7 @@ WantedBy=multi-user.target
             if archive_path.lower().endswith(".zip"):
                 safe_extract_zip(archive_path, tmp_dir)
             else:
-                extract_7z(archive_path, tmp_dir)
+                extract_with_tools(archive_path, tmp_dir)
             patch_root = locate_patch_root(tmp_dir, os.path.basename(exe_path))
             try:
                 copy_patch_tree(patch_root, target_dir, backup_dir, user_info.pw_uid, user_info.pw_gid, manifest)

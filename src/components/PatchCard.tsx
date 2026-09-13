@@ -168,7 +168,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
 
       <PanelSectionRow>
         <TextField
-          label="Patch Path (.zip / .7z)"
+          label="Patch Path (.zip / .7z / .rar)"
           value={patchPath}
           onChange={(e) => setPatchPath(e.target.value)}
         />
