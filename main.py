@@ -545,6 +545,27 @@ def locate_patch_root(extracted_dir, exe_name):
             return current
 
 
+def locate_manual_patch_root(extracted_dir, target_dir):
+    """Maps a patch onto a folder the user picked: use the archive's layout as-is, only unwrapping
+    single top-level wrapper folders (e.g. "Game-Fix/") whose name doesn't already exist in the target."""
+    current = extracted_dir
+    while True:
+        entries = os.listdir(current)
+        if (len(entries) == 1 and os.path.isdir(os.path.join(current, entries[0]))
+                and not os.path.isdir(os.path.join(target_dir, entries[0]))):
+            current = os.path.join(current, entries[0])
+        else:
+            return current
+
+
+def allowed_patch_target(path):
+    """Manual patch targets must be game folders in the user's home or on removable/extra drives."""
+    real = os.path.realpath(path)
+    home = os.path.realpath(get_user_home(get_invoking_user()))
+    roots = [home, "/run/media", "/media", "/mnt"]
+    return any(real.startswith(root.rstrip("/") + os.sep) for root in roots)
+
+
 PATCH_DB_DIR = os.path.join(os.environ.get("DECKY_PLUGIN_SETTINGS_DIR", os.path.join(PLUGIN_DIR, "data")), "patches")
 
 
@@ -1656,20 +1677,31 @@ class Plugin:
         """Extracts a patch archive into the shipping exe's directory, tracking every file so it can be removed later."""
         if not exe_path or not os.path.isfile(exe_path):
             return {"success": False, "message": f"Shipping exe not found: {exe_path}"}
+        return await self._apply_patch(os.path.dirname(exe_path), archive_path, game_name, exe_path=exe_path)
+
+    async def apply_hv_patch_to_folder(self, target_dir, archive_path, game_name=""):
+        """Manual fallback: extracts a patch archive into a folder the user picked, as laid out in the archive."""
+        if not target_dir or not os.path.isdir(target_dir):
+            return {"success": False, "message": f"Folder not found: {target_dir}"}
+        if not allowed_patch_target(target_dir):
+            return {"success": False, "message": f"Refusing to patch {target_dir}: pick a game folder inside your home folder or on an SD card/extra drive."}
+        return await self._apply_patch(os.path.realpath(target_dir), archive_path, game_name, exe_path=None)
+
+    async def _apply_patch(self, target_dir, archive_path, game_name, exe_path=None):
         if not archive_path or not os.path.isfile(archive_path):
             return {"success": False, "message": f"Patch archive not found: {archive_path}"}
         if not archive_path.lower().endswith(PATCH_ARCHIVE_EXTS):
             return {"success": False, "message": "Patch must be a .zip, .7z or .rar archive."}
 
-        target_dir = os.path.dirname(exe_path)
         user_info = pwd.getpwnam(get_invoking_user())
         patch_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
         backup_dir = os.path.join(target_dir, ".hv_patch_backup", patch_id)
         tmp_dir = tempfile.mkdtemp(prefix="hv-patch-")
         manifest = {
             "id": patch_id,
-            "game_name": game_name or os.path.basename(exe_path),
-            "exe_path": exe_path,
+            "game_name": game_name or (os.path.basename(exe_path) if exe_path else os.path.basename(target_dir)),
+            "exe_path": exe_path or "",
+            "manual_target": exe_path is None,
             "archive_name": os.path.basename(archive_path),
             "archive_path": archive_path,
             "target_dir": target_dir,
@@ -1678,13 +1710,18 @@ class Plugin:
             "files": [],
             "created_dirs": [],
         }
+        logger.info(f"Applying {archive_path} to {target_dir} ({'manual folder' if exe_path is None else 'next to ' + exe_path})")
 
         def work():
             if archive_path.lower().endswith(".zip"):
                 safe_extract_zip(archive_path, tmp_dir)
             else:
                 extract_with_tools(archive_path, tmp_dir)
-            patch_root = locate_patch_root(tmp_dir, os.path.basename(exe_path))
+            if exe_path:
+                patch_root = locate_patch_root(tmp_dir, os.path.basename(exe_path))
+            else:
+                patch_root = locate_manual_patch_root(tmp_dir, target_dir)
+            logger.info(f"Patch root inside archive: {os.path.relpath(patch_root, tmp_dir)}")
             try:
                 copy_patch_tree(patch_root, target_dir, backup_dir, user_info.pw_uid, user_info.pw_gid, manifest)
             except Exception:
@@ -1698,7 +1735,7 @@ class Plugin:
         try:
             await asyncio.to_thread(work)
         except Exception as e:
-            logger.error(f"Apply patch failed: {e}")
+            logger.exception("Apply patch failed")
             return {"success": False, "message": f"Failed to apply patch (changes rolled back): {str(e)}"}
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)

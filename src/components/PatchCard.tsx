@@ -1,10 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { usePersistentState } from "../lib/persist";
 import { PathField } from "./PathField";
 import { PanelSection, PanelSectionRow, ButtonItem, DropdownItem, Field, ConfirmModal, showModal } from "@decky/ui";
-import { FaFileArchive, FaSearch, FaSync, FaFolderOpen } from "react-icons/fa";
-import { getPatchableGames, findGameShippingExe, scanForPatches, applyHvPatch, openInDolphin } from "../lib/api";
-import { logAction } from "../lib/log";
+import { openFilePicker } from "@decky/api";
+import { FaFileArchive, FaSearch, FaSync, FaFolderOpen, FaFolder, FaUndo } from "react-icons/fa";
+import {
+  getPatchableGames,
+  findGameShippingExe,
+  scanForPatches,
+  applyHvPatch,
+  applyHvPatchToFolder,
+  openInDolphin
+} from "../lib/api";
+import { logAction, log } from "../lib/log";
 
 interface GameItem {
   id: string;
@@ -25,17 +33,31 @@ interface PatchCardProps {
   onApplied: () => void;
 }
 
+// Values of @decky/api's FileSelectionType (a const enum, which can't be imported at runtime)
+const PICK_FILE = 0;
+const PICK_FOLDER = 1;
+const PATCH_EXTENSIONS = ["zip", "7z", "rar"];
+
 const fileName = (path: string) => path.split("/").pop() || path;
+const dirName = (path: string) => path.substring(0, path.lastIndexOf("/"));
+
+// Ignores results from a shipping exe search that was superseded by picking another game
+let latestSearchGameId = "";
 
 export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => {
   const [games, setGames] = usePersistentState<GameItem[]>("patch.games", []);
   const [selectedGameId, setSelectedGameId] = usePersistentState<string>("patch.game", "");
   const [exeCandidates, setExeCandidates] = usePersistentState<string[]>("patch.exeCandidates", []);
   const [selectedExe, setSelectedExe] = usePersistentState<string>("patch.exe", "");
-  const [searching, setSearching] = useState<boolean>(false);
+  const [manualTarget, setManualTarget] = usePersistentState<string>("patch.manualTarget", "");
+  const [searching, setSearching] = usePersistentState<boolean>("patch.searching", false);
   const [patches, setPatches] = usePersistentState<PatchItem[]>("patch.archives", []);
   const [patchPath, setPatchPath] = usePersistentState<string>("patch.archive", "");
-  const [applying, setApplying] = useState<boolean>(false);
+  const [applying, setApplying] = usePersistentState<boolean>("patch.applying", false);
+
+  const selectedGame = games.find((g) => g.id === selectedGameId);
+  const exeDir = selectedExe ? dirName(selectedExe) : "";
+  const targetDir = manualTarget || exeDir;
 
   const loadLists = async () => {
     logAction("Scan games and patch archives");
@@ -46,8 +68,8 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
         setPatches(patchesRes);
         setPatchPath((prev) => prev || (patchesRes.length > 0 ? patchesRes[0].path : ""));
       }
-    } catch (e) {
-      console.error("Failed to load patch data:", e);
+    } catch (e: any) {
+      log("error", `Failed to load patch data: ${e?.message || e}`);
     }
   };
 
@@ -57,9 +79,11 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
 
   const selectGame = async (gameId: string) => {
     logAction("Select game", gameId);
+    latestSearchGameId = gameId;
     setSelectedGameId(gameId);
     setExeCandidates([]);
     setSelectedExe("");
+    setManualTarget("");
     const game = games.find((g) => g.id === gameId);
     if (!game) return;
 
@@ -67,25 +91,68 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
     onLogMsg(`Searching ${game.name} for *-Win64-Shipping.exe...`);
     try {
       const res = await findGameShippingExe(game.install_dir, game.exe || "");
-      onLogMsg(res.message);
+      if (latestSearchGameId !== gameId) {
+        log("info", `Ignoring shipping exe result for ${gameId}; another game was selected`);
+        return;
+      }
       if (res.success && res.candidates.length > 0) {
         setExeCandidates(res.candidates);
         setSelectedExe(res.candidates[0]);
+        onLogMsg(res.message);
+      } else {
+        onLogMsg(`${res.message} Use "Choose Folder Manually" to pick where the patch files go.`);
       }
     } catch (e: any) {
-      onLogMsg(`Search error: ${e.message || e}`);
+      onLogMsg(`Search error: ${e.message || e}. Use "Choose Folder Manually" instead.`);
     } finally {
-      setSearching(false);
+      if (latestSearchGameId === gameId) setSearching(false);
     }
   };
 
-  const runApply = async () => {
-    logAction("Apply Patch confirmed", { exe: selectedExe, patch: patchPath });
-    setApplying(true);
-    onLogMsg(`Applying ${fileName(patchPath)}...`);
+  const chooseFolder = async () => {
+    const start = manualTarget || exeDir || selectedGame?.install_dir || "/home";
+    logAction("Choose Folder Manually (picker opened)", { start });
     try {
-      const game = games.find((g) => g.id === selectedGameId);
-      const res = await applyHvPatch(selectedExe, patchPath, game?.name || "");
+      const res = await openFilePicker(PICK_FOLDER as any, start, false, true);
+      if (!res?.realpath && !res?.path) return;
+      const folder = res.realpath || res.path;
+      logAction("Manual patch folder chosen", folder);
+      setManualTarget(folder);
+      onLogMsg(`Patch files will be extracted into ${folder}, laid out as they are in the archive.`);
+    } catch (e: any) {
+      // Closing the picker without choosing rejects; that's not an error worth showing
+      log("info", `Folder picker closed: ${e?.message || e}`);
+    }
+  };
+
+  const browsePatch = async () => {
+    const start = patchPath ? dirName(patchPath) : "/home";
+    logAction("Browse for Patch File (picker opened)", { start });
+    try {
+      const res = await openFilePicker(PICK_FILE as any, start, true, true, undefined, PATCH_EXTENSIONS);
+      if (!res?.realpath && !res?.path) return;
+      const file = res.realpath || res.path;
+      logAction("Patch file chosen", file);
+      setPatchPath(file);
+    } catch (e: any) {
+      log("info", `File picker closed: ${e?.message || e}`);
+    }
+  };
+
+  const clearManualTarget = () => {
+    logAction("Use detected folder again", exeDir);
+    setManualTarget("");
+  };
+
+  const runApply = async () => {
+    logAction("Apply Patch confirmed", { target: targetDir, manual: !!manualTarget, exe: selectedExe, patch: patchPath });
+    setApplying(true);
+    onLogMsg(`Applying ${fileName(patchPath)} to ${targetDir}...`);
+    try {
+      const gameName = selectedGame?.name || "";
+      const res = manualTarget
+        ? await applyHvPatchToFolder(manualTarget, patchPath, gameName)
+        : await applyHvPatch(selectedExe, patchPath, gameName);
       onLogMsg(res.message);
       if (res.success) onApplied();
     } catch (e: any) {
@@ -96,18 +163,24 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
   };
 
   const handleApply = () => {
-    logAction("Apply Patch to Game (confirmation shown)", { exe: selectedExe, patch: patchPath });
-    const game = games.find((g) => g.id === selectedGameId);
+    logAction("Apply Patch to Game (confirmation shown)", { target: targetDir, patch: patchPath });
+    const how = manualTarget
+      ? `into the folder you chose (${targetDir}), keeping the archive's folder layout`
+      : `into the folder of ${fileName(selectedExe)}`;
     showModal(
       <ConfirmModal
         strTitle="Apply HV Patch?"
-        strDescription={`Extract ${fileName(patchPath)} into the folder of ${fileName(selectedExe)} for ${game?.name || "this game"}? Every file is tracked and overwritten originals are backed up, so you can remove the patch later.`}
+        strDescription={`Extract ${fileName(patchPath)} ${how} for ${selectedGame?.name || "this game"}? Every file is tracked and overwritten originals are backed up, so you can remove the patch later.`}
         onOK={runApply}
       />
     );
   };
 
-  const selectedExeDir = selectedExe ? selectedExe.substring(0, selectedExe.lastIndexOf("/")) : "";
+  const rowLabel = (icon: React.ReactNode, text: string) => (
+    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+      {icon} {text}
+    </span>
+  );
 
   return (
     <PanelSection title="Custom HV Patch">
@@ -140,7 +213,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
         </PanelSectionRow>
       )}
 
-      {exeCandidates.length > 1 && (
+      {exeCandidates.length > 1 && !manualTarget && (
         <PanelSectionRow>
           <DropdownItem
             label="Multiple EXEs found"
@@ -154,11 +227,29 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
         </PanelSectionRow>
       )}
 
-      {selectedExeDir && (
+      {selectedGameId && !searching && (
         <PanelSectionRow>
-          <div style={{ fontSize: "11px", color: "#9ca3af", wordBreak: "break-all" }}>
-            Target: {selectedExeDir}
+          <div style={{ fontSize: "11px", wordBreak: "break-all", color: targetDir ? "#9ca3af" : "#f87171" }}>
+            {targetDir
+              ? `Target${manualTarget ? " (chosen manually)" : ""}: ${targetDir}`
+              : "No target folder. Choose the folder the patch files should go into."}
           </div>
+        </PanelSectionRow>
+      )}
+
+      {selectedGameId && !searching && (
+        <PanelSectionRow>
+          <ButtonItem layout="below" disabled={applying} onClick={chooseFolder}>
+            {rowLabel(<FaFolder />, manualTarget ? "Choose a Different Folder" : "Choose Folder Manually")}
+          </ButtonItem>
+        </PanelSectionRow>
+      )}
+
+      {manualTarget && exeDir && (
+        <PanelSectionRow>
+          <ButtonItem layout="below" disabled={applying} onClick={clearManualTarget}>
+            {rowLabel(<FaUndo />, `Use Detected Folder (${fileName(selectedExe)})`)}
+          </ButtonItem>
         </PanelSectionRow>
       )}
 
@@ -180,43 +271,38 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => 
       )}
 
       <PanelSectionRow>
-        <PathField
-          label="Patch Path (.zip / .7z / .rar)"
-          value={patchPath}
-          onChange={setPatchPath}
-        />
+        <PathField label="Patch Path (.zip / .7z / .rar)" value={patchPath} onChange={setPatchPath} />
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <ButtonItem layout="below" disabled={applying} onClick={browsePatch}>
+          {rowLabel(<FaFileArchive />, "Browse for Patch File")}
+        </ButtonItem>
       </PanelSectionRow>
 
       <PanelSectionRow>
         <ButtonItem layout="below" disabled={applying} onClick={loadLists}>
-          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <FaSync /> Rescan Games & Patches
-          </span>
+          {rowLabel(<FaSync />, "Rescan Games & Patches")}
         </ButtonItem>
       </PanelSectionRow>
 
-      {selectedExeDir && (
+      {targetDir && (
         <PanelSectionRow>
-          <ButtonItem layout="below" onClick={() => {
-            logAction("Open Game Folder in Dolphin", selectedExeDir);
-            openInDolphin(selectedExeDir).catch(() => {});
-          }}>
-            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <FaFolderOpen /> Open Game Folder in Dolphin
-            </span>
+          <ButtonItem
+            layout="below"
+            onClick={() => {
+              logAction("Open Game Folder in Dolphin", targetDir);
+              openInDolphin(targetDir).catch(() => {});
+            }}
+          >
+            {rowLabel(<FaFolderOpen />, "Open Target Folder in Dolphin")}
           </ButtonItem>
         </PanelSectionRow>
       )}
 
       <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          disabled={applying || searching || !selectedExe || !patchPath}
-          onClick={handleApply}
-        >
-          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <FaFileArchive /> {applying ? "Applying Patch..." : "Apply Patch to Game"}
-          </span>
+        <ButtonItem layout="below" disabled={applying || searching || !targetDir || !patchPath} onClick={handleApply}>
+          {rowLabel(<FaFileArchive />, applying ? "Applying Patch..." : "Apply Patch to Game")}
         </ButtonItem>
       </PanelSectionRow>
     </PanelSection>

@@ -7,7 +7,7 @@ const QUIET_ROUTES = new Set(["get_system_status", "get_backend_log"]);
 const TOAST_ROUTES = new Set([
   "open_in_dolphin", "extract_cpuid_zip", "build_and_install_module", "start_module", "stop_module",
   "disable_umip", "uninstall_module", "configure_hv_games", "disable_hv_games", "import_module_source",
-  "apply_hv_patch", "check_patch", "remove_patch"
+  "apply_hv_patch", "apply_hv_patch_to_folder", "check_patch", "remove_patch"
 ]);
 
 const toast = (body: string) => {
@@ -75,6 +75,7 @@ export const getPatchableGames = loggedCallable<[], any>("get_patchable_games");
 export const findGameShippingExe = loggedCallable<[install_dir: string, exe_hint: string], any>("find_game_shipping_exe");
 export const scanForPatches = loggedCallable<[], any>("scan_for_patches");
 export const applyHvPatch = loggedCallable<[exe_path: string, archive_path: string, game_name: string], any>("apply_hv_patch");
+export const applyHvPatchToFolder = loggedCallable<[target_dir: string, archive_path: string, game_name: string], any>("apply_hv_patch_to_folder");
 export const listInstalledPatches = loggedCallable<[], any>("list_installed_patches");
 export const checkPatch = loggedCallable<[patch_id: string], any>("check_patch");
 export const removePatch = loggedCallable<[patch_id: string, force: boolean], any>("remove_patch");

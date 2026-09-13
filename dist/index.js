@@ -56,6 +56,8 @@ function IconBase(props) {
 // THIS FILE IS AUTO GENERATED
 function FaWrench (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M507.73 109.1c-2.24-9.03-13.54-12.09-20.12-5.51l-74.36 74.36-67.88-11.31-11.31-67.88 74.36-74.36c6.62-6.62 3.43-17.9-5.66-20.16-47.38-11.74-99.55.91-136.58 37.93-39.64 39.64-50.55 97.1-34.05 147.2L18.74 402.76c-24.99 24.99-24.99 65.51 0 90.5 24.99 24.99 65.51 24.99 90.5 0l213.21-213.21c50.12 16.71 107.47 5.68 147.37-34.22 37.07-37.07 49.7-89.32 37.91-136.73zM64 472c-13.25 0-24-10.75-24-24 0-13.26 10.75-24 24-24s24 10.74 24 24c0 13.25-10.75 24-24 24z"},"child":[]}]})(props);
+}function FaUndo (props) {
+  return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M212.333 224.333H12c-6.627 0-12-5.373-12-12V12C0 5.373 5.373 0 12 0h48c6.627 0 12 5.373 12 12v78.112C117.773 39.279 184.26 7.47 258.175 8.007c136.906.994 246.448 111.623 246.157 248.532C504.041 393.258 393.12 504 256.333 504c-64.089 0-122.496-24.313-166.51-64.215-5.099-4.622-5.334-12.554-.467-17.42l33.967-33.967c4.474-4.474 11.662-4.717 16.401-.525C170.76 415.336 211.58 432 256.333 432c97.268 0 176-78.716 176-176 0-97.267-78.716-176-176-176-58.496 0-110.28 28.476-142.274 72.333h98.274c6.627 0 12 5.373 12 12v48c0 6.627-5.373 12-12 12z"},"child":[]}]})(props);
 }function FaTrash (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 448 512"},"child":[{"tag":"path","attr":{"d":"M432 32H312l-9.4-18.7A24 24 0 0 0 281.1 0H166.8a23.72 23.72 0 0 0-21.4 13.3L136 32H16A16 16 0 0 0 0 48v32a16 16 0 0 0 16 16h416a16 16 0 0 0 16-16V48a16 16 0 0 0-16-16zM53.2 467a48 48 0 0 0 47.9 45h245.8a48 48 0 0 0 47.9-45L416 128H32z"},"child":[]}]})(props);
 }function FaTools (props) {
@@ -82,6 +84,8 @@ function FaWrench (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M320.2 243.8l-49.7 99.4c-6 12.1-23.4 11.7-28.9-.6l-56.9-126.3-30 71.7H60.6l182.5 186.5c7.1 7.3 18.6 7.3 25.7 0L451.4 288H342.3l-22.1-44.2zM473.7 73.9l-2.4-2.5c-51.5-52.6-135.8-52.6-187.4 0L256 100l-27.9-28.5c-51.5-52.7-135.9-52.7-187.4 0l-2.4 2.4C-10.4 123.7-12.5 203 31 256h102.4l35.9-86.2c5.4-12.9 23.6-13.2 29.4-.4l58.2 129.3 49-97.9c5.9-11.8 22.7-11.8 28.6 0l27.6 55.2H481c43.5-53 41.4-132.3-7.3-182.1z"},"child":[]}]})(props);
 }function FaGamepad (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 640 512"},"child":[{"tag":"path","attr":{"d":"M480.07 96H160a160 160 0 1 0 114.24 272h91.52A160 160 0 1 0 480.07 96zM248 268a12 12 0 0 1-12 12h-52v52a12 12 0 0 1-12 12h-24a12 12 0 0 1-12-12v-52H84a12 12 0 0 1-12-12v-24a12 12 0 0 1 12-12h52v-52a12 12 0 0 1 12-12h24a12 12 0 0 1 12 12v52h52a12 12 0 0 1 12 12zm216 76a40 40 0 1 1 40-40 40 40 0 0 1-40 40zm64-96a40 40 0 1 1 40-40 40 40 0 0 1-40 40z"},"child":[]}]})(props);
+}function FaFolder (props) {
+  return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M464 128H272l-64-64H48C21.49 64 0 85.49 0 112v288c0 26.51 21.49 48 48 48h416c26.51 0 48-21.49 48-48V176c0-26.51-21.49-48-48-48z"},"child":[]}]})(props);
 }function FaFolderOpen (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 576 512"},"child":[{"tag":"path","attr":{"d":"M572.694 292.093L500.27 416.248A63.997 63.997 0 0 1 444.989 448H45.025c-18.523 0-30.064-20.093-20.731-36.093l72.424-124.155A64 64 0 0 1 152 256h399.964c18.523 0 30.064 20.093 20.73 36.093zM152 224h328v-48c0-26.51-21.49-48-48-48H272l-64-64H48C21.49 64 0 85.49 0 112v278.046l69.077-118.418C86.214 242.25 117.989 224 152 224z"},"child":[]}]})(props);
 }function FaFileImport (props) {
@@ -119,11 +123,12 @@ if (api._version != API_VERSION) {
 }
 const callable = api.callable;
 const toaster = api.toaster;
+const openFilePicker = api.openFilePicker;
 
 const MAX_ENTRIES = 300;
 let entries = [];
 let nextId = 1;
-const listeners = new Set();
+const listeners$1 = new Set();
 const format = (value) => {
     if (typeof value === "string")
         return value;
@@ -141,20 +146,20 @@ function log(level, message, ...details) {
     consoleFn("[HV Control]", message, ...details);
     const text = details.length ? `${message} ${details.map(format).join(" ")}` : message;
     entries = [...entries.slice(-(MAX_ENTRIES - 1)), { id: nextId++, time: Date.now(), level, message: text }];
-    listeners.forEach((listener) => listener());
+    listeners$1.forEach((listener) => listener());
 }
 const logAction = (label, details) => details === undefined ? log("info", `[action] ${label}`) : log("info", `[action] ${label}`, details);
 function clearLogs() {
     entries = [];
-    listeners.forEach((listener) => listener());
+    listeners$1.forEach((listener) => listener());
 }
 function useLogs() {
     const [, rerender] = SP_REACT.useState(0);
     SP_REACT.useEffect(() => {
         const listener = () => rerender((n) => n + 1);
-        listeners.add(listener);
+        listeners$1.add(listener);
         return () => {
-            listeners.delete(listener);
+            listeners$1.delete(listener);
         };
     }, []);
     return entries;
@@ -166,7 +171,7 @@ const QUIET_ROUTES = new Set(["get_system_status", "get_backend_log"]);
 const TOAST_ROUTES = new Set([
     "open_in_dolphin", "extract_cpuid_zip", "build_and_install_module", "start_module", "stop_module",
     "disable_umip", "uninstall_module", "configure_hv_games", "disable_hv_games", "import_module_source",
-    "apply_hv_patch", "check_patch", "remove_patch"
+    "apply_hv_patch", "apply_hv_patch_to_folder", "check_patch", "remove_patch"
 ]);
 const toast = (body) => {
     try {
@@ -235,6 +240,7 @@ const getPatchableGames = loggedCallable("get_patchable_games");
 const findGameShippingExe = loggedCallable("find_game_shipping_exe");
 const scanForPatches = loggedCallable("scan_for_patches");
 const applyHvPatch = loggedCallable("apply_hv_patch");
+const applyHvPatchToFolder = loggedCallable("apply_hv_patch_to_folder");
 const listInstalledPatches = loggedCallable("list_installed_patches");
 const checkPatch = loggedCallable("check_patch");
 const removePatch = loggedCallable("remove_patch");
@@ -267,16 +273,35 @@ const StatusCard = ({ status, onRefresh }) => {
 
 // Decky remounts panel content (closing the menu, opening a dropdown popup, switching tabs),
 // which wipes plain useState. Keep selections at module level so they survive remounts.
+//
+// The store is updated synchronously (not inside a React state updater) and every mounted component
+// using a key is notified. Otherwise a result that arrives after a remount, e.g. the shipping exe
+// search finishing, lands in the unmounted component and is lost.
 const store = new Map();
+const listeners = new Map();
 function usePersistentState(key, initial) {
     const [value, setValue] = SP_REACT.useState(() => (store.has(key) ? store.get(key) : initial));
-    const update = SP_REACT.useCallback((next) => {
-        setValue((prev) => {
-            const resolved = typeof next === "function" ? next(prev) : next;
-            store.set(key, resolved);
-            return resolved;
-        });
+    SP_REACT.useEffect(() => {
+        const listener = (next) => setValue(next);
+        if (!listeners.has(key))
+            listeners.set(key, new Set());
+        listeners.get(key).add(listener);
+        // Pick up anything written between the first render and subscribing
+        if (store.has(key))
+            setValue(store.get(key));
+        return () => {
+            listeners.get(key)?.delete(listener);
+        };
     }, [key]);
+    const update = SP_REACT.useCallback((next) => {
+        const prev = store.has(key) ? store.get(key) : initial;
+        const resolved = typeof next === "function" ? next(prev) : next;
+        store.set(key, resolved);
+        listeners.get(key)?.forEach((listener) => listener(resolved));
+    }, 
+    // initial is only a fallback for keys never written; keep the setter stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key]);
     return [value, update];
 }
 
@@ -613,16 +638,27 @@ const UmipCard = ({ umipDisabled, onRefresh, onLogMsg }) => {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "UMIP Kernel Argument", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "clearcpuid=514 State", children: umipDisabled ? (SP_JSX.jsxs("span", { style: { color: "#4ade80", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaCheck, {}), " UMIP Disabled (Present)"] })) : (SP_JSX.jsxs("span", { style: { color: "#facc15", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaExclamationTriangle, {}), " Default (UMIP Active)"] })) }) }), !umipDisabled && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: loading, onClick: handleDisableUmip, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaShieldAlt, {}), " Disable UMIP (rpm-ostree kargs)"] }) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { fontSize: "11px", color: "#9ca3af" }, children: ["Disabling UMIP appends ", SP_JSX.jsx("code", { children: "clearcpuid=514" }), " to Bazzite kernel args, allowing instructions like ", SP_JSX.jsx("code", { children: "SIDT" }), "/", SP_JSX.jsx("code", { children: "SGDT" }), " to be emulated without triggering access faults. Requires a reboot after applying."] }) })] }));
 };
 
+// Values of @decky/api's FileSelectionType (a const enum, which can't be imported at runtime)
+const PICK_FILE = 0;
+const PICK_FOLDER = 1;
+const PATCH_EXTENSIONS = ["zip", "7z", "rar"];
 const fileName = (path) => path.split("/").pop() || path;
+const dirName = (path) => path.substring(0, path.lastIndexOf("/"));
+// Ignores results from a shipping exe search that was superseded by picking another game
+let latestSearchGameId = "";
 const PatchCard = ({ onLogMsg, onApplied }) => {
     const [games, setGames] = usePersistentState("patch.games", []);
     const [selectedGameId, setSelectedGameId] = usePersistentState("patch.game", "");
     const [exeCandidates, setExeCandidates] = usePersistentState("patch.exeCandidates", []);
     const [selectedExe, setSelectedExe] = usePersistentState("patch.exe", "");
-    const [searching, setSearching] = SP_REACT.useState(false);
+    const [manualTarget, setManualTarget] = usePersistentState("patch.manualTarget", "");
+    const [searching, setSearching] = usePersistentState("patch.searching", false);
     const [patches, setPatches] = usePersistentState("patch.archives", []);
     const [patchPath, setPatchPath] = usePersistentState("patch.archive", "");
-    const [applying, setApplying] = SP_REACT.useState(false);
+    const [applying, setApplying] = usePersistentState("patch.applying", false);
+    const selectedGame = games.find((g) => g.id === selectedGameId);
+    const exeDir = selectedExe ? dirName(selectedExe) : "";
+    const targetDir = manualTarget || exeDir;
     const loadLists = async () => {
         logAction("Scan games and patch archives");
         try {
@@ -635,7 +671,7 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
             }
         }
         catch (e) {
-            console.error("Failed to load patch data:", e);
+            log("error", `Failed to load patch data: ${e?.message || e}`);
         }
     };
     SP_REACT.useEffect(() => {
@@ -643,9 +679,11 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
     }, []);
     const selectGame = async (gameId) => {
         logAction("Select game", gameId);
+        latestSearchGameId = gameId;
         setSelectedGameId(gameId);
         setExeCandidates([]);
         setSelectedExe("");
+        setManualTarget("");
         const game = games.find((g) => g.id === gameId);
         if (!game)
             return;
@@ -653,26 +691,72 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
         onLogMsg(`Searching ${game.name} for *-Win64-Shipping.exe...`);
         try {
             const res = await findGameShippingExe(game.install_dir, game.exe || "");
-            onLogMsg(res.message);
+            if (latestSearchGameId !== gameId) {
+                log("info", `Ignoring shipping exe result for ${gameId}; another game was selected`);
+                return;
+            }
             if (res.success && res.candidates.length > 0) {
                 setExeCandidates(res.candidates);
                 setSelectedExe(res.candidates[0]);
+                onLogMsg(res.message);
+            }
+            else {
+                onLogMsg(`${res.message} Use "Choose Folder Manually" to pick where the patch files go.`);
             }
         }
         catch (e) {
-            onLogMsg(`Search error: ${e.message || e}`);
+            onLogMsg(`Search error: ${e.message || e}. Use "Choose Folder Manually" instead.`);
         }
         finally {
-            setSearching(false);
+            if (latestSearchGameId === gameId)
+                setSearching(false);
         }
     };
-    const runApply = async () => {
-        logAction("Apply Patch confirmed", { exe: selectedExe, patch: patchPath });
-        setApplying(true);
-        onLogMsg(`Applying ${fileName(patchPath)}...`);
+    const chooseFolder = async () => {
+        const start = manualTarget || exeDir || selectedGame?.install_dir || "/home";
+        logAction("Choose Folder Manually (picker opened)", { start });
         try {
-            const game = games.find((g) => g.id === selectedGameId);
-            const res = await applyHvPatch(selectedExe, patchPath, game?.name || "");
+            const res = await openFilePicker(PICK_FOLDER, start, false, true);
+            if (!res?.realpath && !res?.path)
+                return;
+            const folder = res.realpath || res.path;
+            logAction("Manual patch folder chosen", folder);
+            setManualTarget(folder);
+            onLogMsg(`Patch files will be extracted into ${folder}, laid out as they are in the archive.`);
+        }
+        catch (e) {
+            // Closing the picker without choosing rejects; that's not an error worth showing
+            log("info", `Folder picker closed: ${e?.message || e}`);
+        }
+    };
+    const browsePatch = async () => {
+        const start = patchPath ? dirName(patchPath) : "/home";
+        logAction("Browse for Patch File (picker opened)", { start });
+        try {
+            const res = await openFilePicker(PICK_FILE, start, true, true, undefined, PATCH_EXTENSIONS);
+            if (!res?.realpath && !res?.path)
+                return;
+            const file = res.realpath || res.path;
+            logAction("Patch file chosen", file);
+            setPatchPath(file);
+        }
+        catch (e) {
+            log("info", `File picker closed: ${e?.message || e}`);
+        }
+    };
+    const clearManualTarget = () => {
+        logAction("Use detected folder again", exeDir);
+        setManualTarget("");
+    };
+    const runApply = async () => {
+        logAction("Apply Patch confirmed", { target: targetDir, manual: !!manualTarget, exe: selectedExe, patch: patchPath });
+        setApplying(true);
+        onLogMsg(`Applying ${fileName(patchPath)} to ${targetDir}...`);
+        try {
+            const gameName = selectedGame?.name || "";
+            const res = manualTarget
+                ? await applyHvPatchToFolder(manualTarget, patchPath, gameName)
+                : await applyHvPatch(selectedExe, patchPath, gameName);
             onLogMsg(res.message);
             if (res.success)
                 onApplied();
@@ -685,27 +769,31 @@ const PatchCard = ({ onLogMsg, onApplied }) => {
         }
     };
     const handleApply = () => {
-        logAction("Apply Patch to Game (confirmation shown)", { exe: selectedExe, patch: patchPath });
-        const game = games.find((g) => g.id === selectedGameId);
-        DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Apply HV Patch?", strDescription: `Extract ${fileName(patchPath)} into the folder of ${fileName(selectedExe)} for ${game?.name || "this game"}? Every file is tracked and overwritten originals are backed up, so you can remove the patch later.`, onOK: runApply }));
+        logAction("Apply Patch to Game (confirmation shown)", { target: targetDir, patch: patchPath });
+        const how = manualTarget
+            ? `into the folder you chose (${targetDir}), keeping the archive's folder layout`
+            : `into the folder of ${fileName(selectedExe)}`;
+        DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Apply HV Patch?", strDescription: `Extract ${fileName(patchPath)} ${how} for ${selectedGame?.name || "this game"}? Every file is tracked and overwritten originals are backed up, so you can remove the patch later.`, onOK: runApply }));
     };
-    const selectedExeDir = selectedExe ? selectedExe.substring(0, selectedExe.lastIndexOf("/")) : "";
+    const rowLabel = (icon, text) => (SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [icon, " ", text] }));
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "Custom HV Patch", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Game", strDefaultLabel: games.length ? "Select a game" : "No installed games found", rgOptions: games.map((g) => ({
                         data: g.id,
                         label: `${g.name}${g.source === "non-steam" ? " (Non-Steam)" : ""}`
-                    })), selectedOption: selectedGameId, onChange: (opt) => selectGame(opt.data) }) }), selectedGameId && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Shipping EXE", children: searching ? (SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#9ca3af" }, children: [SP_JSX.jsx(FaSearch, {}), " Searching..."] })) : selectedExe ? (SP_JSX.jsx("span", { style: { color: "#4ade80", fontWeight: 600, wordBreak: "break-all" }, children: fileName(selectedExe) })) : (SP_JSX.jsx("span", { style: { color: "#f87171", fontWeight: 600 }, children: "Not Found" })) }) })), exeCandidates.length > 1 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Multiple EXEs found", rgOptions: exeCandidates.map((c) => ({ data: c, label: c })), selectedOption: selectedExe, onChange: (opt) => {
+                    })), selectedOption: selectedGameId, onChange: (opt) => selectGame(opt.data) }) }), selectedGameId && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Shipping EXE", children: searching ? (SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#9ca3af" }, children: [SP_JSX.jsx(FaSearch, {}), " Searching..."] })) : selectedExe ? (SP_JSX.jsx("span", { style: { color: "#4ade80", fontWeight: 600, wordBreak: "break-all" }, children: fileName(selectedExe) })) : (SP_JSX.jsx("span", { style: { color: "#f87171", fontWeight: 600 }, children: "Not Found" })) }) })), exeCandidates.length > 1 && !manualTarget && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Multiple EXEs found", rgOptions: exeCandidates.map((c) => ({ data: c, label: c })), selectedOption: selectedExe, onChange: (opt) => {
                         logAction("Select shipping exe", opt.data);
                         setSelectedExe(opt.data);
-                    } }) })), selectedExeDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { fontSize: "11px", color: "#9ca3af", wordBreak: "break-all" }, children: ["Target: ", selectedExeDir] }) })), patches.length > 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Patch Archive", rgOptions: patches.map((p) => ({
+                    } }) })), selectedGameId && !searching && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "11px", wordBreak: "break-all", color: targetDir ? "#9ca3af" : "#f87171" }, children: targetDir
+                        ? `Target${manualTarget ? " (chosen manually)" : ""}: ${targetDir}`
+                        : "No target folder. Choose the folder the patch files should go into." }) })), selectedGameId && !searching && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying, onClick: chooseFolder, children: rowLabel(SP_JSX.jsx(FaFolder, {}), manualTarget ? "Choose a Different Folder" : "Choose Folder Manually") }) })), manualTarget && exeDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying, onClick: clearManualTarget, children: rowLabel(SP_JSX.jsx(FaUndo, {}), `Use Detected Folder (${fileName(selectedExe)})`) }) })), patches.length > 0 && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Patch Archive", rgOptions: patches.map((p) => ({
                         data: p.path,
                         label: `${p.name} (${(p.size / 1024 / 1024).toFixed(1)} MB)`
                     })), selectedOption: patchPath, onChange: (opt) => {
                         logAction("Select patch archive", opt.data);
                         setPatchPath(opt.data);
-                    } }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(PathField, { label: "Patch Path (.zip / .7z / .rar)", value: patchPath, onChange: setPatchPath }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying, onClick: loadLists, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaSync, {}), " Rescan Games & Patches"] }) }) }), selectedExeDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
-                        logAction("Open Game Folder in Dolphin", selectedExeDir);
-                        openInDolphin(selectedExeDir).catch(() => { });
-                    }, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFolderOpen, {}), " Open Game Folder in Dolphin"] }) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying || searching || !selectedExe || !patchPath, onClick: handleApply, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileArchive, {}), " ", applying ? "Applying Patch..." : "Apply Patch to Game"] }) }) })] }));
+                    } }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(PathField, { label: "Patch Path (.zip / .7z / .rar)", value: patchPath, onChange: setPatchPath }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying, onClick: browsePatch, children: rowLabel(SP_JSX.jsx(FaFileArchive, {}), "Browse for Patch File") }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying, onClick: loadLists, children: rowLabel(SP_JSX.jsx(FaSync, {}), "Rescan Games & Patches") }) }), targetDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => {
+                        logAction("Open Game Folder in Dolphin", targetDir);
+                        openInDolphin(targetDir).catch(() => { });
+                    }, children: rowLabel(SP_JSX.jsx(FaFolderOpen, {}), "Open Target Folder in Dolphin") }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying || searching || !targetDir || !patchPath, onClick: handleApply, children: rowLabel(SP_JSX.jsx(FaFileArchive, {}), applying ? "Applying Patch..." : "Apply Patch to Game") }) })] }));
 };
 
 const InstalledPatches = ({ onLogMsg, refreshKey }) => {
