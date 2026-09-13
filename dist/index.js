@@ -86,6 +86,8 @@ function FaWrench (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 384 512"},"child":[{"tag":"path","attr":{"d":"M377 105L279.1 7c-4.5-4.5-10.6-7-17-7H256v128h128v-6.1c0-6.3-2.5-12.4-7-16.9zM128.4 336c-17.9 0-32.4 12.1-32.4 27 0 15 14.6 27 32.5 27s32.4-12.1 32.4-27-14.6-27-32.5-27zM224 136V0h-63.6v32h-32V0H24C10.7 0 0 10.7 0 24v464c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H248c-13.2 0-24-10.8-24-24zM95.9 32h32v32h-32zm32.3 384c-33.2 0-58-30.4-51.4-62.9L96.4 256v-32h32v-32h-32v-32h32v-32h-32V96h32V64h32v32h-32v32h32v32h-32v32h32v32h-32v32h22.1c5.7 0 10.7 4.1 11.8 9.7l17.3 87.7c6.4 32.4-18.4 62.6-51.4 62.6z"},"child":[]}]})(props);
 }function FaExclamationTriangle (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 576 512"},"child":[{"tag":"path","attr":{"d":"M569.517 440.013C587.975 472.007 564.806 512 527.94 512H48.054c-36.937 0-59.999-40.055-41.577-71.987L246.423 23.985c18.467-32.009 64.72-31.951 83.154 0l239.94 416.028zM288 354c-25.405 0-46 20.595-46 46s20.595 46 46 46 46-20.595 46-46-20.595-46-46-46zm-43.673-165.346l7.418 136c.347 6.364 5.609 11.346 11.982 11.346h48.546c6.373 0 11.635-4.982 11.982-11.346l7.418-136c.375-6.874-5.098-12.654-11.982-12.654h-63.383c-6.884 0-12.356 5.78-11.981 12.654z"},"child":[]}]})(props);
+}function FaClipboardCheck (props) {
+  return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 384 512"},"child":[{"tag":"path","attr":{"d":"M336 64h-80c0-35.3-28.7-64-64-64s-64 28.7-64 64H48C21.5 64 0 85.5 0 112v352c0 26.5 21.5 48 48 48h288c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48zM192 40c13.3 0 24 10.7 24 24s-10.7 24-24 24-24-10.7-24-24 10.7-24 24-24zm121.2 231.8l-143 141.8c-4.7 4.7-12.3 4.6-17-.1l-82.6-83.3c-4.7-4.7-4.6-12.3.1-17L99.1 285c4.7-4.7 12.3-4.6 17 .1l46 46.4 106-105.2c4.7-4.7 12.3-4.6 17 .1l28.2 28.4c4.7 4.8 4.6 12.3-.1 17z"},"child":[]}]})(props);
 }function FaCheck (props) {
   return GenIcon({"tag":"svg","attr":{"viewBox":"0 0 512 512"},"child":[{"tag":"path","attr":{"d":"M173.898 439.404l-166.4-166.4c-9.997-9.997-9.997-26.206 0-36.204l36.203-36.204c9.997-9.998 26.207-9.998 36.204 0L192 312.69 432.095 72.596c9.997-9.997 26.207-9.997 36.204 0l36.203 36.204c9.997 9.997 9.997 26.206 0 36.204l-294.4 294.401c-9.998 9.997-26.207 9.997-36.204-.001z"},"child":[]}]})(props);
 }function FaCheckCircle (props) {
@@ -128,6 +130,9 @@ const getPatchableGames = callable("get_patchable_games");
 const findGameShippingExe = callable("find_game_shipping_exe");
 const scanForPatches = callable("scan_for_patches");
 const applyHvPatch = callable("apply_hv_patch");
+const listInstalledPatches = callable("list_installed_patches");
+const checkPatch = callable("check_patch");
+const removePatch = callable("remove_patch");
 const findModuleSources = callable("find_module_sources");
 const importModuleSource = callable("import_module_source");
 
@@ -442,7 +447,7 @@ const UmipCard = ({ umipDisabled, onRefresh, onLogMsg }) => {
 };
 
 const fileName = (path) => path.split("/").pop() || path;
-const PatchCard = ({ onLogMsg }) => {
+const PatchCard = ({ onLogMsg, onApplied }) => {
     const [games, setGames] = SP_REACT.useState([]);
     const [selectedGameId, setSelectedGameId] = SP_REACT.useState("");
     const [exeCandidates, setExeCandidates] = SP_REACT.useState([]);
@@ -497,8 +502,11 @@ const PatchCard = ({ onLogMsg }) => {
         setApplying(true);
         onLogMsg(`Applying ${fileName(patchPath)}...`);
         try {
-            const res = await applyHvPatch(selectedExe, patchPath);
+            const game = games.find((g) => g.id === selectedGameId);
+            const res = await applyHvPatch(selectedExe, patchPath, game?.name || "");
             onLogMsg(res.message);
+            if (res.success)
+                onApplied();
         }
         catch (e) {
             onLogMsg(`Patch error: ${e.message || e}`);
@@ -509,7 +517,7 @@ const PatchCard = ({ onLogMsg }) => {
     };
     const handleApply = () => {
         const game = games.find((g) => g.id === selectedGameId);
-        DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Apply HV Patch?", strDescription: `Extract ${fileName(patchPath)} into the folder of ${fileName(selectedExe)} for ${game?.name || "this game"}? Files that get overwritten are backed up to .hv_patch_backup first.`, onOK: runApply }));
+        DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Apply HV Patch?", strDescription: `Extract ${fileName(patchPath)} into the folder of ${fileName(selectedExe)} for ${game?.name || "this game"}? Every file is tracked and overwritten originals are backed up, so you can remove the patch later.`, onOK: runApply }));
     };
     const selectedExeDir = selectedExe ? selectedExe.substring(0, selectedExe.lastIndexOf("/")) : "";
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "Custom HV Patch", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Game", strDefaultLabel: games.length ? "Select a game" : "No installed games found", rgOptions: games.map((g) => ({
@@ -519,6 +527,79 @@ const PatchCard = ({ onLogMsg }) => {
                         data: p.path,
                         label: `${p.name} (${(p.size / 1024 / 1024).toFixed(1)} MB)`
                     })), selectedOption: patchPath, onChange: (opt) => setPatchPath(opt.data) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Patch Path (.zip / .7z)", value: patchPath, onChange: (e) => setPatchPath(e.target.value) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying, onClick: loadLists, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaSync, {}), " Rescan Games & Patches"] }) }) }), selectedExeDir && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => openInDolphin(selectedExeDir), children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFolderOpen, {}), " Open Game Folder in Dolphin"] }) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: applying || searching || !selectedExe || !patchPath, onClick: handleApply, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaFileArchive, {}), " ", applying ? "Applying Patch..." : "Apply Patch to Game"] }) }) })] }));
+};
+
+const InstalledPatches = ({ onLogMsg, refreshKey }) => {
+    const [patches, setPatches] = SP_REACT.useState([]);
+    const [selectedId, setSelectedId] = SP_REACT.useState("");
+    const [check, setCheck] = SP_REACT.useState(null);
+    const [needsForce, setNeedsForce] = SP_REACT.useState(false);
+    const [working, setWorking] = SP_REACT.useState(false);
+    const load = async () => {
+        try {
+            const res = await listInstalledPatches();
+            if (Array.isArray(res)) {
+                setPatches(res);
+                if (!res.some((p) => p.id === selectedId)) {
+                    setSelectedId(res.length > 0 ? res[0].id : "");
+                    setCheck(null);
+                    setNeedsForce(false);
+                }
+            }
+        }
+        catch (e) {
+            console.error("Failed to list installed patches:", e);
+        }
+    };
+    SP_REACT.useEffect(() => {
+        load();
+    }, [refreshKey]);
+    const selected = patches.find((p) => p.id === selectedId);
+    const selectPatch = (id) => {
+        setSelectedId(id);
+        setCheck(null);
+        setNeedsForce(false);
+    };
+    const handleCheck = async () => {
+        setWorking(true);
+        try {
+            const res = await checkPatch(selectedId);
+            onLogMsg(res.message);
+            if (res.success)
+                setCheck({ intact: res.intact, missing: res.missing, modified: res.modified });
+        }
+        catch (e) {
+            onLogMsg(`Check error: ${e.message || e}`);
+        }
+        finally {
+            setWorking(false);
+        }
+    };
+    const runRemove = async (force) => {
+        setWorking(true);
+        onLogMsg(`${force ? "Force removing" : "Removing"} ${selected?.archive_name}...`);
+        try {
+            const res = await removePatch(selectedId, force);
+            onLogMsg(res.message);
+            setNeedsForce(!!res.needs_force);
+            setCheck(null);
+            await load();
+        }
+        catch (e) {
+            onLogMsg(`Remove error: ${e.message || e}`);
+        }
+        finally {
+            setWorking(false);
+        }
+    };
+    const confirmRemove = (force) => {
+        if (!selected)
+            return;
+        DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: force ? "Force Remove Patch?" : "Remove Patch?", strDescription: force
+                ? `This reverts the remaining files of ${selected.archive_name} even though they changed since patching (for example after a game update). Only do this if the game is broken.`
+                : `Delete the ${selected.added} file(s) ${selected.archive_name} added to ${selected.game_name} and restore the ${selected.replaced} original file(s) it replaced?`, onOK: () => runRemove(force) }));
+    };
+    return (SP_JSX.jsx(DFL.PanelSection, { title: "Installed Patches", children: patches.length === 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "12px", color: "#9ca3af" }, children: "No tracked patches. Patches you apply above appear here." }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.DropdownItem, { label: "Patch", rgOptions: patches.map((p) => ({ data: p.id, label: `${p.game_name}: ${p.archive_name}` })), selectedOption: selectedId, onChange: (opt) => selectPatch(opt.data) }) }), selected && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Applied", children: SP_JSX.jsx("span", { children: new Date(selected.applied_at * 1000).toLocaleString() }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Files", children: SP_JSX.jsxs("span", { children: [selected.added, " added, ", selected.replaced, " replaced"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsxs("div", { style: { fontSize: "11px", color: "#9ca3af", wordBreak: "break-all" }, children: [selected.target_dir, SP_JSX.jsx("br", {}), selected.files.slice(0, 8).join(", "), selected.files.length > 8 ? ` and ${selected.files.length - 8} more` : ""] }) })] })), check && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "12px", wordBreak: "break-all" }, children: check.missing.length === 0 && check.modified.length === 0 ? (SP_JSX.jsxs("span", { style: { color: "#4ade80" }, children: ["All ", check.intact.length, " patched file(s) intact."] })) : (SP_JSX.jsxs("span", { style: { color: "#facc15" }, children: [SP_JSX.jsx(FaExclamationTriangle, {}), " Changed: ", check.modified.join(", ") || "none", ". Missing: ", check.missing.join(", ") || "none", "."] })) }) })), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: working || !selected, onClick: handleCheck, children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px" }, children: [SP_JSX.jsx(FaClipboardCheck, {}), " Check Patched Files"] }) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: working || !selected, onClick: () => confirmRemove(false), children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#f87171" }, children: [SP_JSX.jsx(FaTrash, {}), " Remove Patch"] }) }) }), needsForce && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: working || !selected, onClick: () => confirmRemove(true), children: SP_JSX.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "6px", color: "#f87171" }, children: [SP_JSX.jsx(FaExclamationTriangle, {}), " Force Remove"] }) }) }))] })) }));
 };
 
 const TabBar = ({ tabs, activeTab, onSelect }) => (SP_JSX.jsx(DFL.Focusable, { "flow-children": "horizontal", style: { display: "flex", gap: "4px", padding: "4px 12px 8px" }, children: tabs.map((tab) => {
@@ -552,6 +633,7 @@ const Content = () => {
     const [status, setStatus] = SP_REACT.useState(null);
     const [logMsg, setLogMsg] = SP_REACT.useState("");
     const [activeTab, setActiveTab] = SP_REACT.useState(lastTab);
+    const [patchesVersion, setPatchesVersion] = SP_REACT.useState(0);
     const selectTab = (id) => {
         lastTab = id;
         setActiveTab(id);
@@ -583,7 +665,7 @@ const Content = () => {
                     wordBreak: "break-word"
                 }, children: logMsg })), activeTab === "module" && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(StatusCard, { status: status, onRefresh: refreshStatus }), status?.status_str === "NOT_INSTALLED" && (SP_JSX.jsx("div", { style: { margin: "0 12px 8px", fontSize: "12px", color: "#facc15" }, children: status?.source_exists
                             ? "Source is ready. Use Build & Install Module below."
-                            : "No module in the plugin yet. Open the Source tab to import one built with hv-install.sh, or extract the cpuid_fault_emulation zip." })), SP_JSX.jsx(ModuleActions, { status: status, onRefresh: refreshStatus, onLogMsg: setLogMsg })] })), activeTab === "source" && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(ModuleImport, { onRefresh: refreshStatus, onLogMsg: setLogMsg }), SP_JSX.jsx(ZipSelector, { sourceExists: status?.source_exists || false, onRefresh: refreshStatus, onLogMsg: setLogMsg })] })), activeTab === "games" && SP_JSX.jsx(HvGamesCard, { onLogMsg: setLogMsg }), activeTab === "patch" && SP_JSX.jsx(PatchCard, { onLogMsg: setLogMsg }), activeTab === "umip" && (SP_JSX.jsx(UmipCard, { umipDisabled: status?.umip_disabled || false, onRefresh: refreshStatus, onLogMsg: setLogMsg }))] }));
+                            : "No module in the plugin yet. Open the Source tab to import one built with hv-install.sh, or extract the cpuid_fault_emulation zip." })), SP_JSX.jsx(ModuleActions, { status: status, onRefresh: refreshStatus, onLogMsg: setLogMsg })] })), activeTab === "source" && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(ModuleImport, { onRefresh: refreshStatus, onLogMsg: setLogMsg }), SP_JSX.jsx(ZipSelector, { sourceExists: status?.source_exists || false, onRefresh: refreshStatus, onLogMsg: setLogMsg })] })), activeTab === "games" && SP_JSX.jsx(HvGamesCard, { onLogMsg: setLogMsg }), activeTab === "patch" && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(PatchCard, { onLogMsg: setLogMsg, onApplied: () => setPatchesVersion((v) => v + 1) }), SP_JSX.jsx(InstalledPatches, { onLogMsg: setLogMsg, refreshKey: patchesVersion })] })), activeTab === "umip" && (SP_JSX.jsx(UmipCard, { umipDisabled: status?.umip_disabled || false, onRefresh: refreshStatus, onLogMsg: setLogMsg }))] }));
 };
 var index = DFL.definePlugin(() => {
     return {

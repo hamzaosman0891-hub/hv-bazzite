@@ -9,6 +9,9 @@ import zipfile
 import logging
 import pwd
 import struct
+import hashlib
+import json
+import uuid
 import asyncio
 import tempfile
 import time
@@ -456,28 +459,138 @@ def locate_patch_root(extracted_dir, exe_name):
             return current
 
 
-def copy_patch_tree(src_root, dest_dir, backup_dir, uid, gid):
-    copied = 0
-    backed_up = 0
+PATCH_DB_DIR = os.path.join(os.environ.get("DECKY_PLUGIN_SETTINGS_DIR", os.path.join(PLUGIN_DIR, "data")), "patches")
+
+
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def inside_dir(path, base):
+    real, base_real = os.path.realpath(path), os.path.realpath(base)
+    return real == base_real or real.startswith(base_real + os.sep)
+
+
+def copy_patch_tree(src_root, dest_dir, backup_dir, uid, gid, manifest):
+    """Copies the patch into dest_dir, recording every file and folder it touches in manifest as it goes."""
     for root, dirs, files in os.walk(src_root):
         rel = os.path.relpath(root, src_root)
         target_root = dest_dir if rel == "." else os.path.join(dest_dir, rel)
-        os.makedirs(target_root, exist_ok=True)
+        if not os.path.isdir(target_root):
+            os.makedirs(target_root)
+            manifest["created_dirs"].append(os.path.relpath(target_root, dest_dir))
         for f in files:
             src = os.path.join(root, f)
             dst = os.path.join(target_root, f)
+            rel_path = os.path.relpath(dst, dest_dir)
+            entry = {"path": rel_path, "action": "added", "sha256": file_sha256(src)}
             if os.path.isfile(dst):
-                backup_path = os.path.join(backup_dir, os.path.relpath(dst, dest_dir))
+                backup_path = os.path.join(backup_dir, rel_path)
                 os.makedirs(os.path.dirname(backup_path), exist_ok=True)
                 shutil.copy2(dst, backup_path)
-                backed_up += 1
+                entry["action"] = "replaced"
+                entry["backup"] = backup_path
+            # Record before copying so a failure mid-copy can still be rolled back
+            manifest["files"].append(entry)
             shutil.copy2(src, dst)
             try:
                 os.chown(dst, uid, gid)
             except Exception:
                 pass
-            copied += 1
-    return copied, backed_up
+
+
+def check_patch_files(manifest):
+    """Compares the game's files against what the patch wrote."""
+    intact, missing, modified = [], [], []
+    for entry in manifest["files"]:
+        path = os.path.join(manifest["target_dir"], entry["path"])
+        if not os.path.isfile(path):
+            missing.append(entry["path"])
+        elif file_sha256(path) != entry["sha256"]:
+            modified.append(entry["path"])
+        else:
+            intact.append(entry["path"])
+    return intact, missing, modified
+
+
+def revert_patch_files(manifest, force=False):
+    """Deletes files the patch added and restores originals it replaced.
+
+    Files changed since the patch (game update, Steam verify, a later patch) are left
+    alone unless force is set, so a removal never clobbers newer files.
+    """
+    target_dir = manifest["target_dir"]
+    removed, restored, skipped = 0, 0, []
+    for entry in reversed(manifest["files"]):
+        path = os.path.join(target_dir, entry["path"])
+        if not inside_dir(path, target_dir):
+            skipped.append(entry["path"])
+            continue
+        exists = os.path.isfile(path)
+        if exists and not force and file_sha256(path) != entry["sha256"]:
+            skipped.append(entry["path"])
+            continue
+        if entry["action"] == "replaced":
+            backup = entry.get("backup", "")
+            if not os.path.isfile(backup):
+                skipped.append(entry["path"])
+                continue
+            shutil.copy2(backup, path)
+            restored += 1
+        elif exists:
+            os.remove(path)
+            removed += 1
+    # Remove folders the patch created, deepest first, only if now empty
+    for rel in sorted(manifest.get("created_dirs", []), key=lambda d: d.count(os.sep), reverse=True):
+        path = os.path.join(target_dir, rel)
+        try:
+            if inside_dir(path, target_dir) and os.path.isdir(path) and not os.listdir(path):
+                os.rmdir(path)
+        except Exception:
+            pass
+    return removed, restored, skipped
+
+
+def cleanup_backup_dir(backup_dir):
+    if backup_dir and os.path.isdir(backup_dir):
+        shutil.rmtree(backup_dir, ignore_errors=True)
+        parent = os.path.dirname(backup_dir)
+        try:
+            if os.path.basename(parent) == ".hv_patch_backup" and not os.listdir(parent):
+                os.rmdir(parent)
+        except Exception:
+            pass
+
+
+def save_patch_manifest(manifest):
+    os.makedirs(PATCH_DB_DIR, exist_ok=True)
+    with open(os.path.join(PATCH_DB_DIR, manifest["id"] + ".json"), "w") as f:
+        json.dump(manifest, f, indent=2)
+
+
+def load_patch_manifest(patch_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", patch_id or ""):
+        return None
+    try:
+        with open(os.path.join(PATCH_DB_DIR, patch_id + ".json"), "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def load_all_patch_manifests():
+    manifests = []
+    for path in glob.glob(os.path.join(PATCH_DB_DIR, "*.json")):
+        try:
+            with open(path, "r") as f:
+                manifests.append(json.load(f))
+        except Exception:
+            pass
+    return sorted(manifests, key=lambda m: m.get("applied_at", 0), reverse=True)
 
 
 def find_module_sources(home, max_depth=3):
@@ -1062,8 +1175,8 @@ WantedBy=multi-user.target
                     found.append({"name": f, "path": full, "size": os.path.getsize(full), "mtime": os.path.getmtime(full)})
         return sorted(found, key=lambda z: z["mtime"], reverse=True)
 
-    async def apply_hv_patch(self, exe_path, archive_path):
-        """Extracts a patch archive into the directory containing the shipping exe, backing up overwritten files."""
+    async def apply_hv_patch(self, exe_path, archive_path, game_name=""):
+        """Extracts a patch archive into the shipping exe's directory, tracking every file so it can be removed later."""
         if not exe_path or not os.path.isfile(exe_path):
             return {"success": False, "message": f"Shipping exe not found: {exe_path}"}
         if not archive_path or not os.path.isfile(archive_path):
@@ -1073,9 +1186,21 @@ WantedBy=multi-user.target
 
         target_dir = os.path.dirname(exe_path)
         user_info = pwd.getpwnam(get_invoking_user())
-        stamp = time.strftime("%Y%m%d-%H%M%S")
-        backup_dir = os.path.join(target_dir, ".hv_patch_backup", stamp)
+        patch_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
+        backup_dir = os.path.join(target_dir, ".hv_patch_backup", patch_id)
         tmp_dir = tempfile.mkdtemp(prefix="hv-patch-")
+        manifest = {
+            "id": patch_id,
+            "game_name": game_name or os.path.basename(exe_path),
+            "exe_path": exe_path,
+            "archive_name": os.path.basename(archive_path),
+            "archive_path": archive_path,
+            "target_dir": target_dir,
+            "backup_dir": backup_dir,
+            "applied_at": time.time(),
+            "files": [],
+            "created_dirs": [],
+        }
 
         def work():
             if archive_path.lower().endswith(".zip"):
@@ -1083,24 +1208,94 @@ WantedBy=multi-user.target
             else:
                 extract_7z(archive_path, tmp_dir)
             patch_root = locate_patch_root(tmp_dir, os.path.basename(exe_path))
-            return copy_patch_tree(patch_root, target_dir, backup_dir, user_info.pw_uid, user_info.pw_gid)
+            try:
+                copy_patch_tree(patch_root, target_dir, backup_dir, user_info.pw_uid, user_info.pw_gid, manifest)
+            except Exception:
+                # Undo whatever was copied so a failed patch never leaves the game half-modified
+                revert_patch_files(manifest, force=True)
+                cleanup_backup_dir(backup_dir)
+                raise
+            if manifest["files"]:
+                save_patch_manifest(manifest)
 
         try:
-            copied, backed_up = await asyncio.to_thread(work)
+            await asyncio.to_thread(work)
         except Exception as e:
             logging.error(f"Apply patch failed: {e}")
-            return {"success": False, "message": f"Failed to apply patch: {str(e)}"}
+            return {"success": False, "message": f"Failed to apply patch (changes rolled back): {str(e)}"}
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-        if copied == 0:
+        if not manifest["files"]:
             return {"success": False, "message": "Patch archive was empty."}
-        msg = f"Applied {os.path.basename(archive_path)}: {copied} file(s) copied into {target_dir}."
-        if backed_up:
-            msg += f" {backed_up} original file(s) backed up to {backup_dir}."
+        replaced = sum(1 for f in manifest["files"] if f["action"] == "replaced")
+        msg = f"Applied {manifest['archive_name']}: {len(manifest['files'])} file(s) copied into {target_dir}."
+        if replaced:
+            msg += f" {replaced} original file(s) backed up."
+        msg += " You can remove it from Installed Patches."
         logging.info(msg)
         return {"success": True, "message": msg}
 
+    async def list_installed_patches(self):
+        """Lists tracked patches, newest first."""
+        result = []
+        for m in load_all_patch_manifests():
+            result.append({
+                "id": m["id"],
+                "game_name": m.get("game_name", ""),
+                "archive_name": m.get("archive_name", ""),
+                "target_dir": m.get("target_dir", ""),
+                "applied_at": m.get("applied_at", 0),
+                "added": sum(1 for f in m["files"] if f["action"] == "added"),
+                "replaced": sum(1 for f in m["files"] if f["action"] == "replaced"),
+                "files": [f["path"] for f in m["files"]],
+            })
+        return result
+
+    async def check_patch(self, patch_id):
+        """Checks whether a patch's files are still exactly as it installed them."""
+        manifest = load_patch_manifest(patch_id)
+        if not manifest:
+            return {"success": False, "message": "Patch record not found."}
+        intact, missing, modified = await asyncio.to_thread(check_patch_files, manifest)
+        if not missing and not modified:
+            msg = f"All {len(intact)} patched file(s) are intact."
+        else:
+            msg = f"{len(intact)} intact, {len(modified)} changed, {len(missing)} missing since the patch was applied."
+        return {"success": True, "message": msg, "intact": intact, "missing": missing, "modified": modified}
+
+    async def remove_patch(self, patch_id, force=False):
+        """Removes a tracked patch: deletes files it added and restores the originals it replaced."""
+        manifest = load_patch_manifest(patch_id)
+        if not manifest:
+            return {"success": False, "message": "Patch record not found."}
+        if not os.path.isdir(manifest["target_dir"]):
+            os.remove(os.path.join(PATCH_DB_DIR, patch_id + ".json"))
+            return {"success": True, "message": "Game folder no longer exists; patch record removed."}
+
+        try:
+            removed, restored, skipped = await asyncio.to_thread(revert_patch_files, manifest, bool(force))
+        except Exception as e:
+            logging.error(f"Remove patch failed: {e}")
+            return {"success": False, "message": f"Failed to remove patch: {str(e)}"}
+
+        if skipped:
+            # Keep the record and backups so the user can retry with force
+            manifest["files"] = [f for f in manifest["files"] if f["path"] in skipped]
+            save_patch_manifest(manifest)
+            return {
+                "success": False,
+                "needs_force": True,
+                "skipped": skipped,
+                "message": f"Removed {removed} and restored {restored} file(s), but {len(skipped)} file(s) changed since patching "
+                           f"(game update or another patch) and were left alone. Use Force Remove to revert them anyway."
+            }
+
+        cleanup_backup_dir(manifest.get("backup_dir", ""))
+        os.remove(os.path.join(PATCH_DB_DIR, patch_id + ".json"))
+        msg = f"Removed {manifest['archive_name']}: deleted {removed} added file(s), restored {restored} original file(s)."
+        logging.info(msg)
+        return {"success": True, "message": msg}
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--hv-games-watch":

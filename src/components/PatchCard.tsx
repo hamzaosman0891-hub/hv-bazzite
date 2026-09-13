@@ -19,11 +19,12 @@ interface PatchItem {
 
 interface PatchCardProps {
   onLogMsg: (msg: string) => void;
+  onApplied: () => void;
 }
 
 const fileName = (path: string) => path.split("/").pop() || path;
 
-export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg }) => {
+export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg, onApplied }) => {
   const [games, setGames] = useState<GameItem[]>([]);
   const [selectedGameId, setSelectedGameId] = useState<string>("");
   const [exeCandidates, setExeCandidates] = useState<string[]>([]);
@@ -77,8 +78,10 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg }) => {
     setApplying(true);
     onLogMsg(`Applying ${fileName(patchPath)}...`);
     try {
-      const res = await applyHvPatch(selectedExe, patchPath);
+      const game = games.find((g) => g.id === selectedGameId);
+      const res = await applyHvPatch(selectedExe, patchPath, game?.name || "");
       onLogMsg(res.message);
+      if (res.success) onApplied();
     } catch (e: any) {
       onLogMsg(`Patch error: ${e.message || e}`);
     } finally {
@@ -91,7 +94,7 @@ export const PatchCard: React.FC<PatchCardProps> = ({ onLogMsg }) => {
     showModal(
       <ConfirmModal
         strTitle="Apply HV Patch?"
-        strDescription={`Extract ${fileName(patchPath)} into the folder of ${fileName(selectedExe)} for ${game?.name || "this game"}? Files that get overwritten are backed up to .hv_patch_backup first.`}
+        strDescription={`Extract ${fileName(patchPath)} into the folder of ${fileName(selectedExe)} for ${game?.name || "this game"}? Every file is tracked and overwritten originals are backed up, so you can remove the patch later.`}
         onOK={runApply}
       />
     );

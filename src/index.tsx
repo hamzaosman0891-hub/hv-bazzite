@@ -10,6 +10,7 @@ import { ModuleActions } from "./components/ModuleActions";
 import { HvGamesCard } from "./components/HvGamesCard";
 import { UmipCard } from "./components/UmipCard";
 import { PatchCard } from "./components/PatchCard";
+import { InstalledPatches } from "./components/InstalledPatches";
 import { TabBar, TabDef } from "./components/TabBar";
 
 const TABS: TabDef[] = [
@@ -27,6 +28,7 @@ const Content: React.FC = () => {
   const [status, setStatus] = useState<any>(null);
   const [logMsg, setLogMsg] = useState<string>("");
   const [activeTab, setActiveTab] = useState<string>(lastTab);
+  const [patchesVersion, setPatchesVersion] = useState<number>(0);
 
   const selectTab = (id: string) => {
     lastTab = id;
@@ -100,7 +102,12 @@ const Content: React.FC = () => {
 
       {activeTab === "games" && <HvGamesCard onLogMsg={setLogMsg} />}
 
-      {activeTab === "patch" && <PatchCard onLogMsg={setLogMsg} />}
+      {activeTab === "patch" && (
+        <>
+          <PatchCard onLogMsg={setLogMsg} onApplied={() => setPatchesVersion((v) => v + 1)} />
+          <InstalledPatches onLogMsg={setLogMsg} refreshKey={patchesVersion} />
+        </>
+      )}
 
       {activeTab === "umip" && (
         <UmipCard
