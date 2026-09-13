@@ -820,8 +820,9 @@ def module_preflight(trace, paths):
     trace.log("info", "system", f"os={pretty.group(1) if pretty else '?'} variant={variant.group(1) if variant else '?'} "
                                 f"gaming_os={detect_gaming_os()} kernel={os.uname().release}")
     vendor = re.search(r"^vendor_id\s*:\s*(\S+)", read_text("/proc/cpuinfo"), re.M)
+    facts["native_cpuid_fault"] = native_cpuid_fault_supported()
     trace.log("info", "system", f"cpu_vendor={vendor.group(1) if vendor else '?'} "
-                                f"native_cpuid_fault={native_cpuid_fault_supported()}")
+                                f"native_cpuid_fault={facts['native_cpuid_fault']}")
 
     caps = process_capabilities()
     facts["cap_sys_module"] = caps["cap_sys_module"]
@@ -867,20 +868,26 @@ def module_failure_diagnostics(trace):
     if not kernel_lines and command_exists("journalctl"):
         res = run_cmd(["journalctl", "-k", "-n", "300", "--no-pager"])
         kernel_lines = (res.stdout or "").splitlines()
-    matches = [l for l in kernel_lines if re.search(r"cpuid_fault|lockdown|module|avc:|denied|taint|signature", l, re.I)][-20:]
+    matches = [l for l in kernel_lines if re.search(r"cpuid_fault|lockdown|unsigned module|module signature|Key was rejected|PKCS#7|avc:.*(module_load|insmod)", l, re.I)][-20:]
     trace.log("warning", "kernel-log", f"{len(matches)} relevant kernel line(s)")
     for l in matches:
         trace.log("warning", "kernel-log", f"  {l}")
     if command_exists("ausearch"):
-        trace.run("selinux-avc", ["ausearch", "-m", "AVC,USER_AVC", "-ts", "recent", "-i"])
+        trace.run("selinux-avc", ["ausearch", "-m", "AVC,USER_AVC", "-ts", "recent", "-i", "-c", "insmod"])
     if command_exists("getsebool"):
         trace.run("selinux-bool", ["getsebool", "domain_kernel_load_modules"])
     return "\n".join(matches)
 
 
 def explain_module_error(output, facts, kernel_log):
-    if "Key was rejected by service" in output:
-        return KEY_REJECTED_HINT
+    if "Key was rejected by service" in output or "Loading of unsigned module is rejected" in kernel_log:
+        hint = KEY_REJECTED_HINT
+        if facts.get("secure_boot") == "enabled" and not facts.get("signed", True):
+            hint = ("Secure Boot is enabled and this module is unsigned, so the kernel refuses to load it. "
+                    "Disable Secure Boot in the BIOS, or sign the module with a key enrolled in MOK.")
+        if facts.get("native_cpuid_fault"):
+            hint += " Note: this CPU supports CPUID faulting natively, so the module may not be needed at all."
+        return hint
     if "No such device" in output:
         return NO_SUCH_DEVICE_HINT
     if "Invalid module format" in output:
@@ -943,6 +950,10 @@ def load_module():
         if res is not None:
             outputs.append((res.stderr or res.stdout or "").strip())
         trace.log("warning", step, "module not loaded after this attempt")
+        if res is not None and "Key was rejected by service" in (res.stderr or res.stdout or ""):
+            # The kernel's signature check refuses unsigned modules however they're loaded
+            trace.log("warning", step, "kernel rejected the module signature; other load methods would fail the same check, stopping")
+            break
 
     trace.log("warning", "restore-kvm", "all attempts failed; reloading KVM")
     trace.run("restore-kvm", ["modprobe", "kvm"])
