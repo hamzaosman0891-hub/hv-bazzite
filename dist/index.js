@@ -187,11 +187,18 @@ function loggedCallable(route) {
             const result = await call(...args);
             const ms = Date.now() - start;
             const res = result;
+            // Module start/stop return a tagged step-by-step trace: [HVMOD <id>] [start:<step>] ...
+            if (res && Array.isArray(res.trace)) {
+                for (const entry of res.trace) {
+                    const level = entry.level === "error" ? "error" : entry.level === "warning" ? "warn" : "info";
+                    log(level, entry.line);
+                }
+            }
             if (res && typeof res === "object" && res.success === false) {
                 log("warn", `<- ${route} failed (${ms}ms): ${res.message}`);
             }
             else if (!quiet) {
-                log("info", `<- ${route} ok (${ms}ms)`, result);
+                log("info", `<- ${route} ok (${ms}ms)`, res && Array.isArray(res.trace) ? { ...res, trace: `${res.trace.length} lines` } : result);
             }
             if (TOAST_ROUTES.has(route) && res && typeof res.message === "string")
                 toast(res.message);

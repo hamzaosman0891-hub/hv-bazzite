@@ -9,6 +9,7 @@ import zipfile
 import logging
 import pwd
 import struct
+import shlex
 import stat
 import hashlib
 import json
@@ -736,97 +737,233 @@ def stage_module_file():
     return STAGED_MODULE_FILE
 
 
-def collect_module_load_diagnostics(paths):
-    """Logs everything useful for working out why the kernel refused the module."""
-    def out(cmd):
-        if not command_exists(cmd[0]):
-            return f"{cmd[0]}: not available"
-        res = run_cmd(cmd)
-        return ((res.stdout or "") + (res.stderr or "")).strip() or f"(exit {res.returncode}, no output)"
+SECURE_BOOT_EFIVAR = "/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+CAP_SYS_MODULE = 16
 
-    lines = [f"process: uid={os.getuid()} euid={os.geteuid()} context={out(['id', '-Z'])}"]
+
+def read_text(path):
     try:
-        with open("/proc/self/status") as f:
-            lines += [l.strip() for l in f if l.startswith(("CapEff", "CapBnd"))]
-    except Exception:
-        pass
-    lines.append(f"getenforce: {out(['getenforce'])}")
-    for path in paths:
-        lines.append(f"file: {out(['ls', '-lZ', path])}")
-    try:
-        with open("/sys/kernel/security/lockdown") as f:
-            lines.append(f"lockdown: {f.read().strip()}")
+        with open(path, "r", errors="replace") as f:
+            return f.read().strip()
     except Exception as e:
-        lines.append(f"lockdown: unreadable ({e})")
-    lines.append(f"secure boot: {out(['mokutil', '--sb-state'])}")
+        return f"<unreadable: {e.__class__.__name__}>"
+
+
+class ModuleTrace:
+    """Tagged, step-by-step log of one module start/stop so every line of an attempt can be grepped by ID.
+
+    Lines look like: [HVMOD 3f9a1c] [start:insmod-staged] $ insmod ... -> exit 1 (12ms)
+    They go to the backend log and are returned to the frontend, which prints them to the console.
+    """
+
+    def __init__(self, op):
+        self.id = uuid.uuid4().hex[:6]
+        self.op = op
+        self.lines = []
+
+    def log(self, level, step, message):
+        line = f"[HVMOD {self.id}] [{self.op}:{step}] {message}"
+        getattr(logger, level)(line)
+        self.lines.append({"level": level, "line": line})
+
+    def run(self, step, cmd, env=None):
+        start = time.monotonic()
+        try:
+            res = run_cmd(cmd, env=env)
+        except Exception as e:
+            self.log("error", step, f"$ {shlex.join(cmd)} could not be run: {e}")
+            return None
+        ms = int((time.monotonic() - start) * 1000)
+        level = "info" if res.returncode == 0 else "warning"
+        self.log(level, step, f"$ {shlex.join(cmd)} -> exit {res.returncode} ({ms}ms)")
+        for stream, text in (("stdout", res.stdout), ("stderr", res.stderr)):
+            for text_line in (text or "").strip().splitlines()[-20:]:
+                self.log(level, step, f"  {stream}: {text_line}")
+        return res
+
+
+def process_capabilities():
+    status = read_text("/proc/self/status")
+    fields = dict(l.split(":", 1) for l in status.splitlines() if ":" in l)
     try:
-        with open("/proc/sys/kernel/modules_disabled") as f:
-            lines.append(f"modules_disabled: {f.read().strip()}")
-    except Exception:
-        pass
-    dmesg = out(["dmesg"]).splitlines()
-    lines.append("dmesg (module/avc/lockdown):")
-    lines += ["  " + l for l in dmesg if re.search(r"cpuid_fault|module|avc|lockdown|denied", l, re.I)][-15:]
+        cap_eff = int(fields.get("CapEff", "0").strip(), 16)
+    except ValueError:
+        cap_eff = 0
+    return {
+        "cap_eff": fields.get("CapEff", "?").strip(),
+        "cap_sys_module": bool(cap_eff & (1 << CAP_SYS_MODULE)),
+        "no_new_privs": fields.get("NoNewPrivs", "?").strip(),
+        "seccomp": fields.get("Seccomp", "?").strip(),
+    }
+
+
+def secure_boot_state():
+    try:
+        with open(SECURE_BOOT_EFIVAR, "rb") as f:
+            data = f.read()
+        return "enabled" if data and data[-1] == 1 else "disabled"
+    except FileNotFoundError:
+        return "unknown (no EFI SecureBoot variable)"
+    except Exception as e:
+        return f"unknown ({e.__class__.__name__})"
+
+
+def module_preflight(trace, paths):
+    """Records everything about the system, this process and the module file before loading."""
+    facts = {}
+    os_release = read_text("/etc/os-release")
+    pretty = re.search(r'^PRETTY_NAME="?([^"\n]*)', os_release, re.M)
+    variant = re.search(r'^VARIANT_ID="?([^"\n]*)', os_release, re.M)
+    trace.log("info", "system", f"os={pretty.group(1) if pretty else '?'} variant={variant.group(1) if variant else '?'} "
+                                f"gaming_os={detect_gaming_os()} kernel={os.uname().release}")
+    vendor = re.search(r"^vendor_id\s*:\s*(\S+)", read_text("/proc/cpuinfo"), re.M)
+    trace.log("info", "system", f"cpu_vendor={vendor.group(1) if vendor else '?'} "
+                                f"native_cpuid_fault={native_cpuid_fault_supported()}")
+
+    caps = process_capabilities()
+    facts["cap_sys_module"] = caps["cap_sys_module"]
+    trace.log("info", "process", f"pid={os.getpid()} uid={os.getuid()} euid={os.geteuid()} "
+                                 f"selinux_context={read_text('/proc/self/attr/current').rstrip(chr(0))}")
+    trace.log("info" if caps["cap_sys_module"] else "warning", "process",
+              f"CapEff={caps['cap_eff']} CAP_SYS_MODULE={caps['cap_sys_module']} "
+              f"NoNewPrivs={caps['no_new_privs']} Seccomp={caps['seccomp']}")
+
+    selinux = read_text("/sys/fs/selinux/enforce") if selinux_enabled() else "not present"
+    facts["selinux_enforcing"] = selinux == "1"
+    lockdown = read_text("/sys/kernel/security/lockdown")
+    facts["lockdown"] = lockdown
+    facts["secure_boot"] = secure_boot_state()
+    trace.log("info", "security", f"selinux_enforce={selinux} lockdown={lockdown} secure_boot={facts['secure_boot']} "
+                                  f"sig_enforce={read_text('/sys/module/module/parameters/sig_enforce')} "
+                                  f"modules_disabled={read_text('/proc/sys/kernel/modules_disabled')}")
+
+    loaded = [l.split()[0] for l in read_text("/proc/modules").splitlines() if l.split()[:1] and l.split()[0] in ("kvm", "kvm_amd", "kvm_intel", "cpuid_fault_emulation")]
+    trace.log("info", "modules", f"relevant loaded modules: {loaded or 'none'}")
+
+    for path in paths:
+        if not os.path.isfile(path):
+            trace.log("warning", "file", f"{path}: missing")
+            continue
+        st = os.stat(path)
+        trace.log("info", "file", f"{path}: size={st.st_size} mode={oct(st.st_mode & 0o7777)} uid={st.st_uid} "
+                                  f"gid={st.st_gid} sha256={file_sha256(path)[:16]}")
+        if command_exists("ls"):
+            trace.run("file", ["ls", "-lZ", path])
+    if paths and os.path.isfile(paths[-1]) and command_exists("modinfo"):
+        info = run_cmd(["modinfo", "-F", "vermagic", paths[-1]])
+        signer = run_cmd(["modinfo", "-F", "signer", paths[-1]])
+        facts["signed"] = bool(signer.stdout.strip())
+        trace.log("info", "file", f"vermagic={info.stdout.strip() or '?'} signer={signer.stdout.strip() or 'UNSIGNED'}")
+    return facts
+
+
+def module_failure_diagnostics(trace):
+    """Kernel and SELinux messages explaining a refused load."""
+    res = run_cmd(["dmesg"]) if command_exists("dmesg") else None
+    kernel_lines = (res.stdout if res and res.returncode == 0 else "").splitlines()
+    if not kernel_lines and command_exists("journalctl"):
+        res = run_cmd(["journalctl", "-k", "-n", "300", "--no-pager"])
+        kernel_lines = (res.stdout or "").splitlines()
+    matches = [l for l in kernel_lines if re.search(r"cpuid_fault|lockdown|module|avc:|denied|taint|signature", l, re.I)][-20:]
+    trace.log("warning", "kernel-log", f"{len(matches)} relevant kernel line(s)")
+    for l in matches:
+        trace.log("warning", "kernel-log", f"  {l}")
     if command_exists("ausearch"):
-        lines.append("ausearch avc:")
-        lines += ["  " + l for l in out(["ausearch", "-m", "AVC,USER_AVC", "-ts", "recent"]).splitlines()[-15:]]
-    for line in lines:
-        logger.warning(f"[module diagnostics] {line}")
+        trace.run("selinux-avc", ["ausearch", "-m", "AVC,USER_AVC", "-ts", "recent", "-i"])
+    if command_exists("getsebool"):
+        trace.run("selinux-bool", ["getsebool", "domain_kernel_load_modules"])
+    return "\n".join(matches)
+
+
+def explain_module_error(output, facts, kernel_log):
+    if "Key was rejected by service" in output:
+        return KEY_REJECTED_HINT
+    if "No such device" in output:
+        return NO_SUCH_DEVICE_HINT
+    if "Invalid module format" in output:
+        return "The .ko was built for a different kernel. Rebuild the module for the running kernel."
+    if "Unknown symbol" in output:
+        return "The module needs symbols the running kernel doesn't export; rebuild it for this kernel."
+    if re.search(r"avc:.*denied.*(module_load|sys_module)", kernel_log):
+        return "SELinux denied loading the module (see the selinux lines in the trace)."
+    if "lockdown" in kernel_log.lower() or ("[none]" not in facts.get("lockdown", "[none]") and not facts.get("signed", True)):
+        return "Kernel lockdown (usually Secure Boot) blocks unsigned modules. Disable Secure Boot or sign the module."
+    if not facts.get("cap_sys_module", True):
+        return "This process lacks CAP_SYS_MODULE, so it isn't allowed to load kernel modules."
+    if "Permission denied" in output or "Operation not permitted" in output:
+        return PERMISSION_HINT
+    return ""
 
 
 def load_module():
-    """Loads cpuid_fault_emulation the same way hv-install.sh does. Returns (success, message)."""
+    """Loads cpuid_fault_emulation like hv-install.sh, trying several ways. Returns (success, message, trace)."""
+    trace = ModuleTrace("start")
+    trace.log("info", "begin", f"module_dir={MODULE_DIR} staged={STAGED_MODULE_FILE} local_module={uses_local_module()}")
+    facts = module_preflight(trace, [MODULE_FILE])
+
     for mod in ("kvm_amd", "kvm"):
-        res = run_cmd(["modprobe", "-r", mod])
-        if res.returncode != 0:
-            logger.warning(f"modprobe -r {mod} failed: {(res.stderr or res.stdout).strip()}")
+        trace.run("kvm-unload", ["modprobe", "-r", mod])
+    still_loaded = [m for m in ("kvm_amd", "kvm") if re.search(rf"^{m} ", read_text("/proc/modules"), re.M)]
+    if still_loaded:
+        trace.log("warning", "kvm-unload", f"still loaded after unload: {still_loaded} (a VM or other process may be using KVM)")
 
+    attempts = []
     if not uses_local_module():
-        res = run_cmd(["modprobe", "cpuid_fault_emulation"])
-        attempts = [("modprobe", res)]
+        attempts.append(("modprobe", ["modprobe", "cpuid_fault_emulation"]))
     else:
-        candidates = []
         try:
-            candidates.append(stage_module_file())
+            staged = stage_module_file()
+            trace.log("info", "stage", f"copied module to {staged}")
+            if command_exists("ls"):
+                trace.run("stage", ["ls", "-lZ", staged])
         except Exception as e:
-            logger.warning(f"Could not stage module into {STAGED_MODULE_DIR}: {e}")
-        candidates.append(MODULE_FILE)
-        attempts = []
-        for path in candidates:
-            res = run_cmd(["insmod", path], env={"LC_ALL": "C"})
-            attempts.append((path, res))
-            if res.returncode == 0 or module_loaded():
-                break
-            logger.warning(f"insmod {path} failed: {(res.stderr or res.stdout).strip()}")
+            staged = None
+            trace.log("warning", "stage", f"could not copy module to {STAGED_MODULE_DIR}: {e}")
+        insmod = shutil.which("insmod", path="/usr/sbin:/usr/bin:/sbin:/bin") or "insmod"
+        systemd_run = shutil.which("systemd-run", path="/usr/bin:/bin")
+        for label, path in (("staged", staged), ("original", MODULE_FILE)):
+            if not path:
+                continue
+            attempts.append((f"insmod-{label}", [insmod, path]))
+            if systemd_run:
+                # Runs insmod as a transient system job started by systemd, outside Decky's process restrictions
+                attempts.append((f"systemd-run-{label}", [systemd_run, "--wait", "--pipe", "--collect", "--quiet",
+                                                          "--setenv=LC_ALL=C", f"--unit=hv-insmod-{trace.id}-{label}",
+                                                          insmod, path]))
 
-    if module_loaded():
-        logger.info(f"cpuid_fault_emulation loaded from {attempts[-1][0]}")
-        return True, "cpuid_fault_emulation started successfully!"
+    outputs = []
+    for step, cmd in attempts:
+        res = trace.run(step, cmd, env={"LC_ALL": "C"})
+        if module_loaded():
+            trace.log("info", step, "SUCCESS: cpuid_fault_emulation is in /proc/modules")
+            return True, f"cpuid_fault_emulation started successfully! (trace {trace.id})", trace.lines
+        if res is not None:
+            outputs.append((res.stderr or res.stdout or "").strip())
+        trace.log("warning", step, "module not loaded after this attempt")
 
-    # Put KVM back so normal virtualisation keeps working
-    run_cmd(["modprobe", "kvm"])
-    run_cmd(["modprobe", "kvm_amd"])
-
-    output = " | ".join((res.stderr or res.stdout).strip() for _, res in attempts if (res.stderr or res.stdout).strip())
-    if "Key was rejected by service" in output:
-        return False, f"Failed to load module: {output}. {KEY_REJECTED_HINT}"
-    if "No such device" in output:
-        return False, f"Failed to load module: {output}. {NO_SUCH_DEVICE_HINT}"
-    if "Permission denied" in output or "Operation not permitted" in output:
-        collect_module_load_diagnostics([path for path, _ in attempts if path != "modprobe"])
-        return False, f"Failed to load module: {output}. {PERMISSION_HINT}"
-    return False, f"Failed to load module: {output or 'unknown error'}"
+    trace.log("warning", "restore-kvm", "all attempts failed; reloading KVM")
+    trace.run("restore-kvm", ["modprobe", "kvm"])
+    trace.run("restore-kvm", ["modprobe", "kvm_amd"])
+    kernel_log = module_failure_diagnostics(trace)
+    output = " | ".join(o for o in outputs if o) or "unknown error"
+    hint = explain_module_error(output, facts, kernel_log)
+    trace.log("error", "result", f"FAILED: {output}" + (f" -> {hint}" if hint else ""))
+    return False, f"Failed to load module (trace {trace.id}): {output}" + (f" {hint}" if hint else ""), trace.lines
 
 
 def unload_module():
-    """Unloads cpuid_fault_emulation and restores KVM. Returns (success, message)."""
+    """Unloads cpuid_fault_emulation and restores KVM. Returns (success, message, trace)."""
+    trace = ModuleTrace("stop")
     cmd = ["rmmod", "cpuid_fault_emulation"] if uses_local_module() else ["modprobe", "-r", "cpuid_fault_emulation"]
-    res = run_cmd(cmd)
+    res = trace.run("unload", cmd)
     if module_loaded():
-        return False, f"Failed to unload module: {(res.stderr or res.stdout).strip() or 'still loaded'}"
-    run_cmd(["modprobe", "kvm_amd"])
-    run_cmd(["modprobe", "kvm"])
-    return True, "cpuid_fault_emulation stopped successfully!"
+        output = ((res.stderr or res.stdout).strip() if res else "") or "still loaded"
+        trace.log("error", "result", f"FAILED: {output}")
+        return False, f"Failed to unload module (trace {trace.id}): {output}", trace.lines
+    trace.run("restore-kvm", ["modprobe", "kvm_amd"])
+    trace.run("restore-kvm", ["modprobe", "kvm"])
+    trace.log("info", "result", "SUCCESS: module unloaded")
+    return True, f"cpuid_fault_emulation stopped successfully! (trace {trace.id})", trace.lines
 
 
 def system_python():
@@ -1250,8 +1387,8 @@ class Plugin:
             return {"success": False, "message": f"Compiled module does not match running kernel {os.uname().release}. Rebuild required."}
 
         try:
-            success, message = await asyncio.to_thread(load_module)
-            return {"success": success, "message": message}
+            success, message, trace = await asyncio.to_thread(load_module)
+            return {"success": success, "message": message, "trace": trace}
         except Exception as e:
             logger.exception("Start module failed")
             return {"success": False, "message": f"Start failed: {str(e)}"}
@@ -1262,8 +1399,8 @@ class Plugin:
             return {"success": True, "message": "cpuid_fault_emulation is already stopped."}
 
         try:
-            success, message = await asyncio.to_thread(unload_module)
-            return {"success": success, "message": message}
+            success, message, trace = await asyncio.to_thread(unload_module)
+            return {"success": success, "message": message, "trace": trace}
         except Exception as e:
             logger.exception("Stop module failed")
             return {"success": False, "message": f"Stop failed: {str(e)}"}
@@ -1639,7 +1776,7 @@ if __name__ == "__main__":
             global owns_module
             if len(tracked) > 0:
                 if not module_loaded():
-                    success, message = load_module()
+                    success, message, _ = load_module()
                     logger.info(f"Watcher start: {message}")
                     if success:
                         owns_module = True
@@ -1647,7 +1784,7 @@ if __name__ == "__main__":
                             f.write("1")
             elif owns_module:
                 if module_loaded():
-                    success, message = unload_module()
+                    success, message, _ = unload_module()
                     logger.info(f"Watcher stop: {message}")
                 owns_module = False
                 if os.path.exists("/run/hv-games-owns-module"):
